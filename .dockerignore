@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+dist/
+data/*.db
+data/chroma/
+.git/
+*.md
+old_ai_projects_docs/

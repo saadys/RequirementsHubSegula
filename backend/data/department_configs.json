@@ -1,0 +1,73 @@
+{
+  "corporate_support": {
+    "display_name": "Corporate & Support Services",
+    "description": "HR, IT, Internal Tools, Recruitment, Onboarding, Knowledge Management",
+    "enabled": true,
+    "specific_fields": [
+      {
+        "name": "service_area",
+        "label": "Service Area",
+        "type": "select",
+        "options": ["hr", "it", "finance", "legal", "facilities", "communication", "other"],
+        "required": true
+      },
+      {
+        "name": "target_users",
+        "label": "Who will use this tool?",
+        "type": "select",
+        "options": ["employees", "managers", "hr_team", "it_team", "candidates", "external", "other"],
+        "required": true
+      },
+      {
+        "name": "estimated_user_count",
+        "label": "Estimated Number of Users",
+        "type": "select",
+        "options": ["1-10", "10-50", "50-200", "200+"],
+        "required": false
+      },
+      {
+        "name": "has_existing_system",
+        "label": "Is there an existing system/tool being used today?",
+        "type": "boolean",
+        "required": true
+      }
+    ],
+    "required_base_fields": [
+      "project_name",
+      "team_contact_name",
+      "team_contact_email",
+      "problem_description",
+      "current_process",
+      "expected_outcome",
+      "deadline_urgency"
+    ]
+  },
+  "system_development": {
+    "display_name": "System Development & Validation",
+    "description": "Virtual Validation, Crash Simulation, Testing & Validation",
+    "enabled": false,
+    "specific_fields": [],
+    "required_base_fields": []
+  },
+  "industrial_performance": {
+    "display_name": "Industrial Performance & Data Management",
+    "description": "Cost Engineering, Value Optimization, Supply Chain, Data Management",
+    "enabled": false,
+    "specific_fields": [],
+    "required_base_fields": []
+  },
+  "mechanical_engineering": {
+    "display_name": "Mechanical Engineering",
+    "description": "Powertrain, Chassis, Interior, Exterior, Body",
+    "enabled": false,
+    "specific_fields": [],
+    "required_base_fields": []
+  },
+  "manufacturing": {
+    "display_name": "Manufacturing",
+    "description": "Stamping, Welding, Assembly, Paint Shop, Metrology",
+    "enabled": false,
+    "specific_fields": [],
+    "required_base_fields": []
+  }
+}
