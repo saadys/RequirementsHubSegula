@@ -1,7 +1,7 @@
-import litellm
 from litellm import Router
 from langchain_litellm import ChatLiteLLMRouter
 from backend import config
+from backend.contracts.schemas import FactExtraction, ClarificationQuestions
 
 model_list = []
 
@@ -54,4 +54,18 @@ def get_llm() -> ChatLiteLLMRouter:
         model="gemini-model-group",
         temperature=config.LLM_TEMPERATURE,
     )
+
+def get_structured_llm() -> ChatLiteLLMRouter:
+    """Returns a ChatLiteLLMRouter configured to output validated FactExtraction objects."""
+    return get_llm().with_structured_output(FactExtraction)
+
+def get_clarification_llm() -> ChatLiteLLMRouter:
+    """Returns a ChatLiteLLMRouter configured to output validated ClarificationQuestions objects."""
+    # Use higher temperature for clarification generation to allow more natural, diverse questions
+    return ChatLiteLLMRouter(
+        router=router,
+        model="gemini-model-group",
+        temperature=config.LLM_TEMPERATURE_CLARIFICATION,
+    ).with_structured_output(ClarificationQuestions)
+
 
