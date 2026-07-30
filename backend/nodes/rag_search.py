@@ -7,13 +7,44 @@ Determines if an exact match exists (score >= 0.95).
 Owner: Track A
 """
 
-# TODO [Track A]: Implement rag_search node
-#
-# Input from state: form_data, parsed_files_text, department
-# Output to state: similar_projects, rag_scores, is_exact_match, exact_match_project
-#
-# def rag_search(state: PipelineState) -> dict:
-#     1. Build query string from form_data + parsed_files_text
-#     2. Call vectorstore.search_similar(query, top_k=RAG_TOP_K)
-#     3. Check if any score >= RAG_EXACT_MATCH_THRESHOLD
-#     4. Return state updates
+from backend.contracts.state import PipelineState
+from backend.services.vectorstore import search_similar
+from backend import config
+
+
+def rag_search(state: PipelineState) -> dict:
+    """Node that searches ChromaDB for historic projects similar to the submitted request."""
+    form_data = state.get("form_data", {})
+    problem_desc = form_data.get("problem_description", "")
+    parsed_files = state.get("parsed_files_text", [])
+    
+    # Build search query string from problem description and uploaded file content
+    query_parts = [problem_desc]
+    if parsed_files:
+        query_parts.extend(parsed_files)
+        
+    query = " ".join(query_parts).strip()
+    
+    # Query ChromaDB for top-K similar projects
+    results = search_similar(query, top_k=config.RAG_TOP_K)
+    
+    similar_projects = []
+    rag_scores = []
+    is_exact_match = False
+    exact_match_project = None
+    
+    for doc, score, meta in results:
+        similar_projects.append(meta)
+        rag_scores.append(float(score))
+        
+        # Check if score meets exact match threshold (e.g., >= 0.95)
+        if score >= config.RAG_EXACT_MATCH_THRESHOLD and not is_exact_match:
+            is_exact_match = True
+            exact_match_project = meta
+            
+    return {
+        "similar_projects": similar_projects,
+        "rag_scores": rag_scores,
+        "is_exact_match": is_exact_match,
+        "exact_match_project": exact_match_project,
+    }
