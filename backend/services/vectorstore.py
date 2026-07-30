@@ -1,16 +1,15 @@
-"""
-ChromaDB Vector Store Setup
+import os
+import chromadb
+from backend import config
 
-Manages the historic projects collection for RAG similarity search.
+# Fallback path if CHROMA_PERSIST_DIR is not yet in config.py
+persist_dir = getattr(config, "CHROMA_PERSIST_DIR", os.path.join(config.DATA_DIR, "chroma"))
 
-Owner: Track A
-"""
+# Initialize ChromaDB persistent client
+client = chromadb.PersistentClient(path=persist_dir)
 
-# TODO [Track A]: Implement ChromaDB vector store
-#
-# 1. Initialize ChromaDB client (persistent, data stored in data/chroma/)
-# 2. Create/get collection with text-embedding-004 embedding function
-# 3. Implement add_project(project: dict) → embeds and stores
-# 4. Implement search_similar(query: str, top_k: int) → list of (doc, score)
-# 5. Implement load_seed_data() → reads historic_projects.json, adds to collection
-# 6. Export: get_vectorstore(), search_similar(), load_seed_data()
+def get_collection():
+    """Gets or creates the ChromaDB collection using the default embedding function."""
+    return client.get_or_create_collection(
+        name=config.CHROMA_COLLECTION_NAME
+    )
