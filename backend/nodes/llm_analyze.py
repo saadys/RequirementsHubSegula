@@ -7,14 +7,55 @@ business team's request. Uses department-specific prompts and RAG context.
 Owner: Track A
 """
 
-# TODO [Track A]: Implement llm_analyze node
-#
-# Input from state: form_data, parsed_files_text, department,
-#                   similar_projects, clarification_round, clarification_answers
-# Output to state: extracted_facts (dict)
-#
-# def llm_analyze(state: PipelineState) -> dict:
-#     1. Load department prompt from prompts/corporate_support.py
-#     2. Build context: form_data + file text + similar projects + any clarification answers
-#     3. Call structured_llm.invoke(messages) → FactExtraction
-#     4. Return {"extracted_facts": result.model_dump()}
+from backend.contracts.state import PipelineState
+from backend.services.llm import get_structured_llm
+from backend import config
+from backend.prompts.corporate_support import get_prompt as get_corporate_support_prompt
+
+
+def llm_analyze(state: PipelineState) -> dict:
+    """Node that invokes the structured LLM to extract facts from the request."""
+    form_data = state.get("form_data", {}).copy()
+    parsed_files = state.get("parsed_files_text", [])
+    
+    # Append parsed file content to problem description if available
+    if parsed_files:
+        files_text = "\n\n### Uploaded File Attachments:\n" + "\n---\n".join(parsed_files)
+        existing_problem = form_data.get("problem_description", "")
+        form_data["problem_description"] = f"{existing_problem}\n{files_text}".strip()
+
+    # Filter RAG results by similarity threshold (e.g. >= 0.60) before injecting into prompt
+    similar_projects = state.get("similar_projects", [])
+    rag_scores = state.get("rag_scores", [])
+    similarity_threshold = getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60)
+    
+    filtered_projects = [
+        proj for proj, score in zip(similar_projects, rag_scores)
+        if score >= similarity_threshold
+    ]
+    
+    # Get clarification parameters if any
+    clarification_round = state.get("clarification_round", 0)
+    clarification_answers = state.get("clarification_answers", [])
+    clarification_questions = state.get("clarification_questions", [])
+
+    # Select prompt builder based on department (defaulting to corporate_support)
+    # Future departments can be dynamically routed here
+    prompt_builder = get_corporate_support_prompt
+
+    # Build messages for LLM invocation
+    messages = prompt_builder(
+        form_data=form_data,
+        similar_projects=filtered_projects if filtered_projects else None,
+        clarification_round=clarification_round,
+        clarification_answers=clarification_answers,
+        clarification_questions=clarification_questions,
+    )
+
+    # Invoke LLM with structured output schema (FactExtraction)
+    llm = get_structured_llm()
+    result = llm.invoke(messages)
+
+    return {
+        "extracted_facts": result.model_dump()
+    }

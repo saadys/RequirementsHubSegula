@@ -1,1 +1,99 @@
-[]
+[
+  {
+    "id": "irfane-001",
+    "project_name": "IRFANE Chatbot",
+    "department": "corporate_support",
+    "problem_description": "New employees face onboarding friction, knowledge accessibility challenges, and heavy dependency on subject-matter experts. Manual internal document searching for HR and IT policies is slow and insecure.",
+    "solution_description": "AI-powered multi-agent system that securely optimizes internal document search and generates grounded answers for enterprise users using intelligent routing and RAG-powered answers.",
+    "ai_techniques": [
+      "multi-agent",
+      "rag",
+      "intelligent-routing",
+      "llm-generation"
+    ],
+    "outcome": "successful",
+    "contact_person": "ER-RACHIDI Ibtissam / ELHACHYMI Ahmed Yassine",
+    "tags": [
+      "chatbot",
+      "hr",
+      "it",
+      "onboarding",
+      "document-search",
+      "rag",
+      "multi-agent"
+    ],
+    "year": 2026
+  },
+  {
+    "id": "talentium-001",
+    "project_name": "Talentium Recruitment System",
+    "department": "corporate_support",
+    "problem_description": "Traditional recruitment processes suffer from manual ATS screening, cognitive bias and subjectivity, lack of decision traceability, auditing difficulties, and fragmented application channels (LinkedIn, email, forms).",
+    "solution_description": "Autonomous multi-agent LLM system for recruitment decision support. Features intelligent candidate matching, CV scoring, bias detection, technical coding tests, language tests, and automated interview workflow.",
+    "ai_techniques": [
+      "multi-agent",
+      "cv-scoring",
+      "bias-detection",
+      "llm-reasoning"
+    ],
+    "outcome": "successful",
+    "contact_person": "ABBAR Wissale / KETATNI Maryam",
+    "tags": [
+      "recruitment",
+      "hr",
+      "cv-screening",
+      "scoring",
+      "bias-detection",
+      "coding-test",
+      "multi-agent"
+    ],
+    "year": 2026
+  },
+  {
+    "id": "autocrashcheck-001",
+    "project_name": "AutoCrashCheck",
+    "department": "automotive_engineering",
+    "problem_description": "Manual checks of crash simulation input files suffer from time loss, high human error rate, and wasted computation due to undetected design errors or missing data before running heavy simulations.",
+    "solution_description": "AI-based solution to instantly detect design errors and missing data in crash simulation files in seconds, generating actionable insights and structured validation reports.",
+    "ai_techniques": [
+      "anomaly-detection",
+      "file-validation",
+      "error-detection",
+      "rule-based-ai"
+    ],
+    "outcome": "successful",
+    "contact_person": "ISMAILI Ayman / EL HASSANY ikram",
+    "tags": [
+      "crash-simulation",
+      "automotive",
+      "error-detection",
+      "validation",
+      "engineering"
+    ],
+    "year": 2026
+  },
+  {
+    "id": "fleetio-001",
+    "project_name": "FleetIO Platform",
+    "department": "corporate_support",
+    "problem_description": "Limited visibility of vehicle availability, frequent reservation conflicts, and lack of predictive analysis for enterprise vehicle fleet management.",
+    "solution_description": "Intelligent vehicle reservation management platform using data warehouse analytics, RAG-powered context retrieval, and LLM-driven real-time strategic recommendations for fleet managers.",
+    "ai_techniques": [
+      "rag",
+      "llm-recommendation",
+      "predictive-analysis",
+      "data-warehouse"
+    ],
+    "outcome": "successful",
+    "contact_person": "EL BOUKILI Imane / BENZEGUNINE Imane",
+    "tags": [
+      "fleet-management",
+      "reservations",
+      "logistics",
+      "recommendations",
+      "rag",
+      "analytics"
+    ],
+    "year": 2026
+  }
+]
