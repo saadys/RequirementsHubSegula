@@ -2,20 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { 
   Cpu, 
   Server, 
-  Send, 
-  Layers,
-  Sparkles,
-  FileCheck
+  Layers
 } from 'lucide-react';
 import { fetchHealth, fetchDepartments } from './api/client';
 import SubmissionForm from './components/SubmissionForm';
 import SubmissionResultCard from './components/SubmissionResultCard';
+import ClarificationLoop from './components/ClarificationLoop';
 
 export default function App() {
   const [health, setHealth] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [submissionResult, setSubmissionResult] = useState(null);
-  const [activeTab, setActiveTab] = useState('portal'); // 'portal' | 'diagnostics'
+  const [currentView, setCurrentView] = useState('portal'); // 'portal' | 'clarification' | 'diagnostics'
+  const [activeRequestId, setActiveRequestId] = useState(null);
 
   useEffect(() => {
     async function loadInitData() {
@@ -36,10 +35,24 @@ export default function App() {
 
   const handleSubmissionSuccess = (result) => {
     setSubmissionResult(result);
+    setActiveRequestId(result.request_id);
+    setCurrentView('portal');
+  };
+
+  const handleOpenClarification = (reqId) => {
+    setActiveRequestId(reqId);
+    setCurrentView('clarification');
+  };
+
+  const handleClarificationComplete = (updatedResult) => {
+    setSubmissionResult(updatedResult);
+    setCurrentView('portal');
   };
 
   const handleResetSubmission = () => {
     setSubmissionResult(null);
+    setActiveRequestId(null);
+    setCurrentView('portal');
   };
 
   return (
@@ -55,16 +68,16 @@ export default function App() {
               Segula <span style={{ color: '#3B82F6' }}>AI Requirement Hub</span>
             </h1>
             <p style={{ fontSize: '0.82rem', color: '#94A3B8' }}>
-              Business Requestor Portal & Feasibility Assessor
+              Business Requestor Portal & Multi-Turn Clarification Engine
             </p>
           </div>
         </div>
 
-        {/* Status Badge & Tab Toggle */}
+        {/* Status Badge & View Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.8)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
             <button
-              onClick={() => setActiveTab('portal')}
+              onClick={() => setCurrentView('portal')}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
@@ -72,15 +85,15 @@ export default function App() {
                 fontWeight: 600,
                 border: 'none',
                 cursor: 'pointer',
-                background: activeTab === 'portal' ? '#3B82F6' : 'transparent',
-                color: activeTab === 'portal' ? '#FFFFFF' : '#94A3B8',
+                background: currentView === 'portal' || currentView === 'clarification' ? '#3B82F6' : 'transparent',
+                color: currentView === 'portal' || currentView === 'clarification' ? '#FFFFFF' : '#94A3B8',
                 transition: 'all 0.2s ease',
               }}
             >
               Request Portal
             </button>
             <button
-              onClick={() => setActiveTab('diagnostics')}
+              onClick={() => setCurrentView('diagnostics')}
               style={{
                 padding: '6px 14px',
                 borderRadius: '8px',
@@ -88,8 +101,8 @@ export default function App() {
                 fontWeight: 600,
                 border: 'none',
                 cursor: 'pointer',
-                background: activeTab === 'diagnostics' ? '#3B82F6' : 'transparent',
-                color: activeTab === 'diagnostics' ? '#FFFFFF' : '#94A3B8',
+                background: currentView === 'diagnostics' ? '#3B82F6' : 'transparent',
+                color: currentView === 'diagnostics' ? '#FFFFFF' : '#94A3B8',
                 transition: 'all 0.2s ease',
               }}
             >
@@ -107,7 +120,7 @@ export default function App() {
       </header>
 
       {/* Main View Area */}
-      {activeTab === 'portal' && (
+      {currentView === 'portal' && (
         <>
           {!submissionResult ? (
             <SubmissionForm 
@@ -118,37 +131,45 @@ export default function App() {
             <SubmissionResultCard 
               result={submissionResult}
               onViewReport={(id) => alert(`Report Viewer (Module D) for Request ${id} will be opened in Step 4.`)}
-              onViewClarification={(id) => alert(`Clarification Loop (Module C) for Request ${id} will be opened in Step 3.`)}
+              onViewClarification={handleOpenClarification}
               onReset={handleResetSubmission}
             />
           )}
         </>
       )}
 
-      {activeTab === 'diagnostics' && (
+      {currentView === 'clarification' && (
+        <ClarificationLoop 
+          requestId={activeRequestId}
+          onClarificationComplete={handleClarificationComplete}
+          onBack={() => setCurrentView('portal')}
+        />
+      )}
+
+      {currentView === 'diagnostics' && (
         <section className="glass-panel" style={{ padding: '32px' }}>
           <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#F8FAFC', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Layers size={20} color="#3B82F6" /> Backend API Architecture & Status
+            <Layers size={20} color="#3B82F6" /> Backend API Architecture & Multi-Turn Clarification Engine
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
             <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
-              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Gateway</span>
-              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#34D399', marginTop: '4px' }}>
-                FastAPI v0.1.0
+              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Clarification Route</span>
+              <div style={{ fontSize: '1rem', fontWeight: 700, color: '#FBBF24', marginTop: '4px' }}>
+                /api/submissions/:id/clarification
               </div>
             </div>
 
             <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
-              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Active Department</span>
-              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#60A5FA', marginTop: '4px' }}>
-                Corporate & Support
+              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Graph Node</span>
+              <div style={{ fontSize: '1rem', fontWeight: 700, color: '#60A5FA', marginTop: '4px' }}>
+                generate_questions $\rightarrow$ llm_analyze
               </div>
             </div>
 
             <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
-              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Graph Pipeline</span>
-              <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#FBBF24', marginTop: '4px' }}>
-                Compiled LangGraph
+              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Evaluation Range</span>
+              <div style={{ fontSize: '1rem', fontWeight: 700, color: '#34D399', marginTop: '4px' }}>
+                Score 40–69 Needs Clarifications
               </div>
             </div>
           </div>
