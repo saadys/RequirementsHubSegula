@@ -28,7 +28,7 @@ FALLBACK_MODEL = "openai/gpt-4o"
 # ── Scoring Thresholds ───────────────────────────────────────────
 
 SCORE_GO_THRESHOLD = 70          # >= 70 = GO
-SCORE_NOGO_THRESHOLD = 40        # < 40 = NO_GO
+SCORE_NOGO_THRESHOLD = 20        # < 40 = NO_GO
 # Between 40-69 = NEEDS_CLARIFICATION
 
 # ── Clarification Settings ───────────────────────────────────────

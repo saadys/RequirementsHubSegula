@@ -2,18 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { 
   Cpu, 
   Server, 
-  Layers
+  Layers,
+  ShieldCheck,
+  Send
 } from 'lucide-react';
 import { fetchHealth, fetchDepartments } from './api/client';
 import SubmissionForm from './components/SubmissionForm';
 import SubmissionResultCard from './components/SubmissionResultCard';
 import ClarificationLoop from './components/ClarificationLoop';
+import ReportViewer from './components/ReportViewer';
+import AdminDashboard from './components/AdminDashboard';
 
 export default function App() {
   const [health, setHealth] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [submissionResult, setSubmissionResult] = useState(null);
-  const [currentView, setCurrentView] = useState('portal'); // 'portal' | 'clarification' | 'diagnostics'
+  const [currentView, setCurrentView] = useState('portal'); // 'portal' | 'clarification' | 'report' | 'dashboard' | 'diagnostics'
   const [activeRequestId, setActiveRequestId] = useState(null);
 
   useEffect(() => {
@@ -44,8 +48,14 @@ export default function App() {
     setCurrentView('clarification');
   };
 
+  const handleOpenReport = (reqId) => {
+    setActiveRequestId(reqId);
+    setCurrentView('report');
+  };
+
   const handleClarificationComplete = (updatedResult) => {
     setSubmissionResult(updatedResult);
+    setActiveRequestId(updatedResult.request_id);
     setCurrentView('portal');
   };
 
@@ -56,7 +66,7 @@ export default function App() {
   };
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '32px 20px' }}>
+    <div style={{ maxWidth: '1150px', margin: '0 auto', padding: '32px 20px' }}>
       {/* App Header */}
       <header className="glass-panel" style={{ padding: '20px 28px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -68,12 +78,12 @@ export default function App() {
               Segula <span style={{ color: '#3B82F6' }}>AI Requirement Hub</span>
             </h1>
             <p style={{ fontSize: '0.82rem', color: '#94A3B8' }}>
-              Business Requestor Portal & Multi-Turn Clarification Engine
+              Feasibility Assessment & AI Engineering Review Platform
             </p>
           </div>
         </div>
 
-        {/* Status Badge & View Toggle */}
+        {/* View Switcher Bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.8)', padding: '4px', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
             <button
@@ -85,12 +95,34 @@ export default function App() {
                 fontWeight: 600,
                 border: 'none',
                 cursor: 'pointer',
-                background: currentView === 'portal' || currentView === 'clarification' ? '#3B82F6' : 'transparent',
-                color: currentView === 'portal' || currentView === 'clarification' ? '#FFFFFF' : '#94A3B8',
+                background: ['portal', 'clarification', 'report'].includes(currentView) ? '#3B82F6' : 'transparent',
+                color: ['portal', 'clarification', 'report'].includes(currentView) ? '#FFFFFF' : '#94A3B8',
                 transition: 'all 0.2s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
               }}
             >
-              Request Portal
+              <Send size={14} /> Request Portal
+            </button>
+            <button
+              onClick={() => setCurrentView('dashboard')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+                background: currentView === 'dashboard' ? '#3B82F6' : 'transparent',
+                color: currentView === 'dashboard' ? '#FFFFFF' : '#94A3B8',
+                transition: 'all 0.2s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <ShieldCheck size={14} /> AI Admin Dashboard
             </button>
             <button
               onClick={() => setCurrentView('diagnostics')}
@@ -130,7 +162,7 @@ export default function App() {
           ) : (
             <SubmissionResultCard 
               result={submissionResult}
-              onViewReport={(id) => alert(`Report Viewer (Module D) for Request ${id} will be opened in Step 4.`)}
+              onViewReport={handleOpenReport}
               onViewClarification={handleOpenClarification}
               onReset={handleResetSubmission}
             />
@@ -146,30 +178,41 @@ export default function App() {
         />
       )}
 
+      {currentView === 'report' && (
+        <ReportViewer 
+          requestId={activeRequestId}
+          onBack={() => setCurrentView('portal')}
+        />
+      )}
+
+      {currentView === 'dashboard' && (
+        <AdminDashboard />
+      )}
+
       {currentView === 'diagnostics' && (
         <section className="glass-panel" style={{ padding: '32px' }}>
           <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#F8FAFC', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Layers size={20} color="#3B82F6" /> Backend API Architecture & Multi-Turn Clarification Engine
+            <Layers size={20} color="#3B82F6" /> Backend API Architecture & Admin Dashboard
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
             <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
-              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Clarification Route</span>
+              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Pending Queue Route</span>
               <div style={{ fontSize: '1rem', fontWeight: 700, color: '#FBBF24', marginTop: '4px' }}>
-                /api/submissions/:id/clarification
+                GET /api/dashboard/pending
               </div>
             </div>
 
             <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
-              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Graph Node</span>
+              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Decision Override Route</span>
               <div style={{ fontSize: '1rem', fontWeight: 700, color: '#60A5FA', marginTop: '4px' }}>
-                generate_questions $\rightarrow$ llm_analyze
+                POST /api/dashboard/:id/decision
               </div>
             </div>
 
             <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-glass)' }}>
-              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Evaluation Range</span>
+              <span style={{ fontSize: '0.75rem', color: '#94A3B8', textTransform: 'uppercase', fontWeight: 700 }}>Management Override</span>
               <div style={{ fontSize: '1rem', fontWeight: 700, color: '#34D399', marginTop: '4px' }}>
-                Score 40–69 Needs Clarifications
+                Manual GO/NO_GO Approval
               </div>
             </div>
           </div>
