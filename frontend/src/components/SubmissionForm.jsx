@@ -1,0 +1,458 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Send, 
+  UploadCloud, 
+  FileText, 
+  Trash2, 
+  Loader2, 
+  User, 
+  Mail, 
+  Briefcase, 
+  HelpCircle, 
+  AlertCircle,
+  Clock,
+  Sparkles
+} from 'lucide-react';
+import { fetchDepartmentFields, submitRequest, submitRequestWithUpload } from '../api/client';
+import DepartmentSelector from './DepartmentSelector';
+
+export default function SubmissionForm({ departments, onSubmissionSuccess }) {
+  const [selectedDept, setSelectedDept] = useState('corporate_support');
+  const [dynamicFields, setDynamicFields] = useState([]);
+  const [loadingFields, setLoadingFields] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    project_name: '',
+    team_contact_name: '',
+    team_contact_email: '',
+    problem_description: '',
+    current_process: '',
+    expected_outcome: '',
+    data_description: '',
+    deadline_urgency: 'medium',
+    department_specific: {
+      service_area: 'hr',
+      target_users: 'employees',
+      has_existing_system: false,
+    },
+  });
+
+  // PDF File state
+  const [attachedFile, setAttachedFile] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
+
+  // Fetch department-specific fields when department changes
+  useEffect(() => {
+    async function loadFields() {
+      try {
+        setLoadingFields(true);
+        const res = await fetchDepartmentFields(selectedDept);
+        setDynamicFields(res.specific_fields || []);
+      } catch (err) {
+        console.warn('Using default dynamic fields fallback');
+        setDynamicFields([
+          { name: 'service_area', label: 'Service Area', type: 'select', options: ['hr', 'it', 'finance', 'legal', 'facilities', 'communication', 'other'], required: true },
+          { name: 'target_users', label: 'Target Users', type: 'select', options: ['employees', 'hr_team', 'it_team', 'management', 'all_staff'], required: true },
+          { name: 'has_existing_system', label: 'Has Existing System?', type: 'boolean', required: false },
+        ]);
+      } finally {
+        setLoadingFields(false);
+      }
+    }
+
+    loadFields();
+  }, [selectedDept]);
+
+  const handleInputChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleDeptSpecificChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      department_specific: {
+        ...prev.department_specific,
+        [field]: value,
+      },
+    }));
+  };
+
+  // Drag & drop handlers
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.name.toLowerCase().endsWith('.pdf')) {
+        setAttachedFile(file);
+        setError(null);
+      } else {
+        setError('Only PDF specification documents are supported.');
+      }
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.name.toLowerCase().endsWith('.pdf')) {
+        setAttachedFile(file);
+        setError(null);
+      } else {
+        setError('Only PDF specification documents are supported.');
+      }
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+
+    // Basic validation
+    if (!formData.project_name.trim()) {
+      setError('Please enter a Project Name.');
+      return;
+    }
+    if (!formData.team_contact_name.trim() || !formData.team_contact_email.trim()) {
+      setError('Please provide contact name and email.');
+      return;
+    }
+    if (!formData.problem_description.trim()) {
+      setError('Please describe the problem you want AI to solve.');
+      return;
+    }
+
+    const payload = {
+      ...formData,
+      department: selectedDept,
+    };
+
+    try {
+      setSubmitting(true);
+      let result;
+
+      if (attachedFile) {
+        // Submit via multipart form upload endpoint
+        const uploadData = new FormData();
+        uploadData.append('form_data_json', JSON.stringify(payload));
+        uploadData.append('file', attachedFile);
+        result = await submitRequestWithUpload(uploadData);
+      } else {
+        // Submit standard JSON payload
+        result = await submitRequest(payload);
+      }
+
+      onSubmissionSuccess(result);
+    } catch (err) {
+      setError(err.message || 'Failed to submit AI project request');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="glass-panel" style={{ padding: '32px' }}>
+      <div style={{ marginBottom: '24px' }}>
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#F8FAFC', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Sparkles color="#3B82F6" size={24} /> Submit New AI Project Requirement
+        </h2>
+        <p style={{ fontSize: '0.88rem', color: '#94A3B8', marginTop: '4px' }}>
+          Fill out the project details below to trigger automated technical feasibility scoring and Cahier des Charges generation.
+        </p>
+      </div>
+
+      {error && (
+        <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#F87171', padding: '12px 16px', borderRadius: '10px', fontSize: '0.88rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <AlertCircle size={18} /> {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        {/* Department Selector */}
+        <DepartmentSelector 
+          departments={departments}
+          selectedDept={selectedDept}
+          onSelectDept={(id) => {
+            setSelectedDept(id);
+            setFormData((prev) => ({ ...prev, department: id }));
+          }}
+        />
+
+        {/* Section 1: Contact & Project Info */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
+              Project Name *
+            </label>
+            <input 
+              type="text" 
+              className="glass-input" 
+              placeholder="e.g. Intelligent Onboarding Assistant"
+              value={formData.project_name}
+              onChange={(e) => handleInputChange('project_name', e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
+              Contact Person Name *
+            </label>
+            <input 
+              type="text" 
+              className="glass-input" 
+              placeholder="e.g. Jean Dupont"
+              value={formData.team_contact_name}
+              onChange={(e) => handleInputChange('team_contact_name', e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
+              Contact Email *
+            </label>
+            <input 
+              type="email" 
+              className="glass-input" 
+              placeholder="e.g. jean.dupont@segula.fr"
+              value={formData.team_contact_email}
+              onChange={(e) => handleInputChange('team_contact_email', e.target.value)}
+              required
+            />
+          </div>
+        </div>
+
+        {/* Section 2: Requirement Core Fields */}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
+            Problem Description (What pain point should AI solve?) *
+          </label>
+          <textarea 
+            className="glass-input" 
+            rows={3}
+            placeholder="Describe the operational challenge in detail (e.g. New employees waste 2 weeks searching HR policy PDFs across shared folders)..."
+            value={formData.problem_description}
+            onChange={(e) => handleInputChange('problem_description', e.target.value)}
+            required
+          />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
+              Current Manual Process
+            </label>
+            <textarea 
+              className="glass-input" 
+              rows={2}
+              placeholder="How is this handled today? (e.g. Manual SharePoint search and email inquiries)"
+              value={formData.current_process}
+              onChange={(e) => handleInputChange('current_process', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
+              Expected Outcome / Target Benefit
+            </label>
+            <textarea 
+              className="glass-input" 
+              rows={2}
+              placeholder="What is the desired result? (e.g. Instant conversational HR bot answering in under 10 sec)"
+              value={formData.expected_outcome}
+              onChange={(e) => handleInputChange('expected_outcome', e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Section 3: Data & Urgency */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
+              Available Data Description
+            </label>
+            <input 
+              type="text" 
+              className="glass-input" 
+              placeholder="e.g. 500 PDF policy documents and FAQ tables"
+              value={formData.data_description}
+              onChange={(e) => handleInputChange('data_description', e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
+              Project Urgency / Deadline
+            </label>
+            <select 
+              className="glass-input"
+              value={formData.deadline_urgency}
+              onChange={(e) => handleInputChange('deadline_urgency', e.target.value)}
+            >
+              <option value="low" style={{ background: '#0F172A' }}>Low (Planning phase)</option>
+              <option value="medium" style={{ background: '#0F172A' }}>Medium (Targeted this quarter)</option>
+              <option value="high" style={{ background: '#0F172A' }}>High (Urgent business need)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Section 4: Dynamic Department Fields */}
+        {dynamicFields && dynamicFields.length > 0 && (
+          <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '20px', borderRadius: '14px', border: '1px solid var(--border-glass)', marginBottom: '24px' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#60A5FA', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Briefcase size={16} /> Department-Specific Context (Corporate & Support)
+            </h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              {dynamicFields.map((field) => {
+                const val = formData.department_specific?.[field.name] ?? '';
+
+                if (field.type === 'select') {
+                  return (
+                    <div key={field.name}>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', marginBottom: '4px' }}>
+                        {field.label} {field.required && '*'}
+                      </label>
+                      <select 
+                        className="glass-input"
+                        value={val}
+                        onChange={(e) => handleDeptSpecificChange(field.name, e.target.value)}
+                      >
+                        {field.options?.map((opt) => (
+                          <option key={opt} value={opt} style={{ background: '#0F172A' }}>
+                            {opt.toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                } else if (field.type === 'boolean') {
+                  return (
+                    <div key={field.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '24px' }}>
+                      <input 
+                        type="checkbox"
+                        id={field.name}
+                        checked={Boolean(val)}
+                        onChange={(e) => handleDeptSpecificChange(field.name, e.target.checked)}
+                        style={{ width: '18px', height: '18px', accentColor: '#3B82F6', cursor: 'pointer' }}
+                      />
+                      <label htmlFor={field.name} style={{ fontSize: '0.85rem', color: '#E2E8F0', cursor: 'pointer' }}>
+                        {field.label}
+                      </label>
+                    </div>
+                  );
+                }
+                return null;
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Section 5: PDF Upload Dropzone */}
+        <div style={{ marginBottom: '28px' }}>
+          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '8px' }}>
+            Attach Requirement PDF Specification (Optional)
+          </label>
+
+          {!attachedFile ? (
+            <div
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              style={{
+                border: dragActive ? '2px dashed #3B82F6' : '2px dashed rgba(255, 255, 255, 0.15)',
+                borderRadius: '14px',
+                padding: '24px',
+                textAlign: 'center',
+                background: dragActive ? 'rgba(59, 130, 246, 0.1)' : 'rgba(15, 23, 42, 0.3)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <UploadCloud size={32} color="#60A5FA" style={{ margin: '0 auto 8px' }} />
+              <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#E2E8F0' }}>
+                Drag and drop your PDF specification document here
+              </div>
+              <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '4px' }}>
+                or click to browse files (PDF up to 25MB)
+              </div>
+              <input
+                type="file"
+                accept=".pdf"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+                id="pdf-upload-input"
+              />
+              <label 
+                htmlFor="pdf-upload-input" 
+                className="btn-secondary" 
+                style={{ marginTop: '12px', fontSize: '0.8rem', padding: '6px 14px', display: 'inline-flex' }}
+              >
+                Browse PDF File
+              </label>
+            </div>
+          ) : (
+            <div style={{ background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '14px 18px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <FileText size={24} color="#60A5FA" />
+                <div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#F8FAFC' }}>
+                    {attachedFile.name}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#93C5FD' }}>
+                    {(attachedFile.size / 1024).toFixed(1)} KB • PDF Document attached for automated graph parsing
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttachedFile(null)}
+                style={{ background: 'transparent', border: 'none', color: '#F87171', cursor: 'pointer', padding: '6px' }}
+                title="Remove attachment"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          className="btn-primary"
+          disabled={submitting}
+          style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '1rem' }}
+        >
+          {submitting ? (
+            <>
+              <Loader2 size={20} className="animate-spin" /> Evaluating Feasibility & Executing Graph...
+            </>
+          ) : (
+            <>
+              <Send size={18} /> Submit Requirement & Generate Feasibility Assessment
+            </>
+          )}
+        </button>
+      </form>
+    </div>
+  );
+}
