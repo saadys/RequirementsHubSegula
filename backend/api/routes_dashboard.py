@@ -49,15 +49,17 @@ class PendingSubmissionItem(BaseModel):
     clarification_round: int = 0
     created_at: Optional[str] = None
     missing_fields: List[str] = []
+    has_report: bool = False
+    report_type: Optional[str] = None
 
 
 @router.get(
     "/pending",
     response_model=List[PendingSubmissionItem],
-    summary="List all requests awaiting review or clarification",
+    summary="List all requests for AI Engineering review",
 )
 async def list_pending_requests(status_filter: Optional[str] = None):
-    """Retrieves all submissions that are pending review or clarification (e.g. NEEDS_CLARIFICATION, INCOMPLETE, REJECTED)."""
+    """Retrieves submissions for AI engineering review (optionally filtered by status)."""
     all_subs = list_submissions()
     pending_items = []
 
@@ -65,33 +67,41 @@ async def list_pending_requests(status_filter: Optional[str] = None):
         dec = sub.get("decision")
         stat = sub.get("status", "PROCESSED")
 
-        # By default, pending includes requests needing clarification, incomplete, or rejected/review
-        is_pending = (
-            stat in ["NEEDS_CLARIFICATION", "INCOMPLETE", "REJECTED"]
-            or dec in ["NEEDS_CLARIFICATION", "NO_GO"]
-            or bool(sub.get("missing_fields"))
-        )
+        # Determine matching based on status filter
+        if status_filter and status_filter.upper() != "ALL":
+            sf = status_filter.upper()
+            if sf == "GO":
+                matches = stat in ["COMPLETED", "GO"] or dec == "GO"
+            elif sf == "NO_GO" or sf == "REJECTED":
+                matches = stat in ["REJECTED", "NO_GO"] or dec == "NO_GO"
+            elif sf == "NEEDS_CLARIFICATION":
+                matches = stat == "NEEDS_CLARIFICATION" or dec == "NEEDS_CLARIFICATION"
+            elif sf == "INCOMPLETE":
+                matches = stat == "INCOMPLETE" or bool(sub.get("missing_fields"))
+            else:
+                matches = stat == sf or dec == sf
+            if not matches:
+                continue
 
-        if status_filter:
-            is_pending = is_pending and (stat == status_filter or dec == status_filter)
-
-        if is_pending:
-            form_data = sub.get("form_data", {}) or {}
-            pending_items.append(
-                PendingSubmissionItem(
-                    request_id=sub["request_id"],
-                    project_name=form_data.get("project_name") or "Untitled Project",
-                    department=sub.get("department") or form_data.get("department") or "corporate_support",
-                    team_contact_name=form_data.get("team_contact_name") or "N/A",
-                    team_contact_email=form_data.get("team_contact_email") or "N/A",
-                    status=stat,
-                    decision=dec,
-                    score=sub.get("score"),
-                    clarification_round=sub.get("clarification_round", 0),
-                    created_at=sub.get("created_at"),
-                    missing_fields=sub.get("missing_fields", []),
-                )
+        form_data = sub.get("form_data", {}) or {}
+        has_rep = bool(sub.get("report"))
+        pending_items.append(
+            PendingSubmissionItem(
+                request_id=sub["request_id"],
+                project_name=form_data.get("project_name") or "Untitled Project",
+                department=sub.get("department") or form_data.get("department") or "corporate_support",
+                team_contact_name=form_data.get("team_contact_name") or "N/A",
+                team_contact_email=form_data.get("team_contact_email") or "N/A",
+                status=stat,
+                decision=dec,
+                score=sub.get("score"),
+                clarification_round=sub.get("clarification_round", 0),
+                created_at=sub.get("created_at"),
+                missing_fields=sub.get("missing_fields", []),
+                has_report=has_rep,
+                report_type=sub.get("report_type"),
             )
+        )
 
     return pending_items
 

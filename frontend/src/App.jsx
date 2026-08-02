@@ -186,7 +186,7 @@ export default function App() {
       )}
 
       {currentView === 'dashboard' && (
-        <AdminDashboard />
+        <AdminDashboard onViewReport={handleOpenReport} />
       )}
 
       {currentView === 'diagnostics' && (

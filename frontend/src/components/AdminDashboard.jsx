@@ -2,22 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, 
   Search, 
-  Filter, 
-  AlertTriangle, 
   CheckCircle2, 
-  XCircle, 
-  HelpCircle, 
   Edit3, 
   UserCheck, 
   Loader2, 
   RefreshCw,
   X,
   Send,
-  MessageSquare
+  BookOpen,
+  FileText
 } from 'lucide-react';
-import { fetchPendingDashboard, overrideDecision } from '../api/client';
+import { fetchPendingDashboard, overrideDecision, fetchReport } from '../api/client';
 
-export default function AdminDashboard() {
+export default function AdminDashboard({ onViewReport }) {
   const [pendingItems, setPendingItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -32,6 +29,11 @@ export default function AdminDashboard() {
   const [submittingOverride, setSubmittingOverride] = useState(false);
   const [overrideSuccess, setOverrideSuccess] = useState(null);
 
+  // Modal Report Preview State
+  const [modalReportText, setModalReportText] = useState(null);
+  const [loadingModalReport, setLoadingModalReport] = useState(false);
+  const [showModalReportPreview, setShowModalReportPreview] = useState(false);
+
   const loadPending = async () => {
     try {
       setLoading(true);
@@ -39,7 +41,7 @@ export default function AdminDashboard() {
       const data = await fetchPendingDashboard(statusFilter === 'ALL' ? null : statusFilter);
       setPendingItems(data || []);
     } catch (err) {
-      setError(err.message || 'Failed to fetch pending requests.');
+      setError(err.message || 'Failed to fetch requests.');
     } finally {
       setLoading(false);
     }
@@ -49,17 +51,33 @@ export default function AdminDashboard() {
     loadPending();
   }, [statusFilter]);
 
-  const handleOpenOverrideModal = (sub) => {
+  const handleOpenOverrideModal = async (sub) => {
     setSelectedSub(sub);
     setOverrideDecisionVal(sub.decision || 'GO');
     setReviewerNotes(sub.reviewer_notes || '');
     setReviewerName(sub.reviewer_name || 'AI Engineering Lead');
     setOverrideSuccess(null);
+    setModalReportText(null);
+    setShowModalReportPreview(false);
+
+    // Fetch report preview for modal if report exists
+    if (sub.has_report || sub.decision === 'GO' || sub.status === 'COMPLETED') {
+      try {
+        setLoadingModalReport(true);
+        const reportRes = await fetchReport(sub.request_id);
+        setModalReportText(reportRes?.report || null);
+      } catch (err) {
+        console.warn('No report found for request');
+      } finally {
+        setLoadingModalReport(false);
+      }
+    }
   };
 
   const handleCloseModal = () => {
     setSelectedSub(null);
     setSubmittingOverride(false);
+    setShowModalReportPreview(false);
   };
 
   const handleSubmitOverride = async (e) => {
@@ -78,7 +96,7 @@ export default function AdminDashboard() {
       setTimeout(() => {
         handleCloseModal();
         loadPending();
-      }, 1500);
+      }, 1200);
     } catch (err) {
       setError(err.message || 'Failed to override decision.');
     } finally {
@@ -110,7 +128,7 @@ export default function AdminDashboard() {
               AI Engineering Review Dashboard
             </h2>
             <p style={{ fontSize: '0.85rem', color: '#94A3B8' }}>
-              Management queue for inspecting pending requests and performing manual decision overrides
+              Management queue for inspecting all project submissions, viewing reports, and overriding decisions
             </p>
           </div>
         </div>
@@ -137,12 +155,12 @@ export default function AdminDashboard() {
 
         {/* Status Filter Buttons */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {['ALL', 'NEEDS_CLARIFICATION', 'INCOMPLETE', 'REJECTED'].map((filterKey) => (
+          {['ALL', 'GO', 'NEEDS_CLARIFICATION', 'INCOMPLETE', 'REJECTED'].map((filterKey) => (
             <button
               key={filterKey}
               onClick={() => setStatusFilter(filterKey)}
               style={{
-                padding: '6px 12px',
+                padding: '6px 14px',
                 borderRadius: '8px',
                 fontSize: '0.78rem',
                 fontWeight: 600,
@@ -153,7 +171,7 @@ export default function AdminDashboard() {
                 transition: 'all 0.2s ease',
               }}
             >
-              {filterKey.replace('_', ' ')}
+              {filterKey === 'GO' ? '🟢 APPROVED (GO)' : filterKey.replace('_', ' ')}
             </button>
           ))}
         </div>
@@ -165,16 +183,16 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Pending Table */}
+      {/* Requests Table */}
       {loading ? (
         <div style={{ padding: '48px', textAlign: 'center' }}>
           <Loader2 size={32} color="#3B82F6" className="animate-spin" style={{ margin: '0 auto 12px' }} />
-          <div style={{ fontSize: '0.9rem', color: '#94A3B8' }}>Loading pending review queue...</div>
+          <div style={{ fontSize: '0.9rem', color: '#94A3B8' }}>Loading requests queue...</div>
         </div>
       ) : filteredList.length === 0 ? (
         <div style={{ padding: '48px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '14px', border: '1px solid var(--border-glass)' }}>
           <CheckCircle2 size={36} color="#34D399" style={{ margin: '0 auto 12px' }} />
-          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#F8FAFC' }}>Queue Clear</div>
+          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#F8FAFC' }}>No Submissions Found</div>
           <div style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '4px' }}>
             No requests currently matching the selected filter.
           </div>
@@ -189,7 +207,7 @@ export default function AdminDashboard() {
                 <th style={{ padding: '12px 16px', fontWeight: 700 }}>Contact</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700 }}>Status</th>
                 <th style={{ padding: '12px 16px', fontWeight: 700 }}>Score</th>
-                <th style={{ padding: '12px 16px', fontWeight: 700 }}>Action</th>
+                <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -209,11 +227,12 @@ export default function AdminDashboard() {
                   badgeLabel = 'NEEDS CLARIFICATION';
                 }
 
+                const hasReportAvailable = sub.has_report || dec === 'GO' || sub.status === 'COMPLETED';
+
                 return (
                   <tr 
                     key={sub.request_id} 
                     style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)', transition: 'background 0.2s' }}
-                    className="hover:bg-slate-800/40"
                   >
                     <td style={{ padding: '14px 16px' }}>
                       <div style={{ fontWeight: 700, color: '#F8FAFC' }}>
@@ -243,14 +262,26 @@ export default function AdminDashboard() {
                       {sub.score !== null && sub.score !== undefined ? `${sub.score}/100` : 'N/A'}
                     </td>
 
-                    <td style={{ padding: '14px 16px' }}>
-                      <button 
-                        className="btn-primary" 
-                        onClick={() => handleOpenOverrideModal(sub)}
-                        style={{ padding: '6px 12px', fontSize: '0.78rem' }}
-                      >
-                        <Edit3 size={14} /> Review & Override
-                      </button>
+                    <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        {hasReportAvailable && onViewReport && (
+                          <button
+                            className="btn-secondary"
+                            onClick={() => onViewReport(sub.request_id)}
+                            style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                            title="Spectate full Cahier des Charges report"
+                          >
+                            <BookOpen size={14} color="#60A5FA" /> Spectate Report
+                          </button>
+                        )}
+                        <button 
+                          className="btn-primary" 
+                          onClick={() => handleOpenOverrideModal(sub)}
+                          style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                        >
+                          <Edit3 size={14} /> Review & Override
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -260,7 +291,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Manual Override Modal */}
+      {/* Manual Override & Spectate Report Modal */}
       {selectedSub && (
         <div style={{
           position: 'fixed',
@@ -268,7 +299,7 @@ export default function AdminDashboard() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(7, 11, 25, 0.85)',
+          background: 'rgba(7, 11, 25, 0.88)',
           backdropFilter: 'blur(12px)',
           display: 'flex',
           alignItems: 'center',
@@ -276,12 +307,12 @@ export default function AdminDashboard() {
           zIndex: 100,
           padding: '20px',
         }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '580px', padding: '32px', background: '#0F172A', border: '1px solid var(--border-glass-bright)' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '750px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', background: '#0F172A', border: '1px solid var(--border-glass-bright)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <UserCheck size={22} color="#3B82F6" />
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#F8FAFC' }}>
-                  AI Engineer Decision Override
+                  AI Engineer Decision & Report Review
                 </h3>
               </div>
               <button onClick={handleCloseModal} style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
@@ -295,17 +326,72 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            <form onSubmit={handleSubmitOverride}>
-              <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '14px', borderRadius: '10px', marginBottom: '20px', fontSize: '0.85rem' }}>
-                <div style={{ color: '#94A3B8', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 700 }}>Target Request</div>
-                <div style={{ fontWeight: 700, color: '#F8FAFC', marginTop: '2px' }}>{selectedSub.project_name}</div>
-                <div style={{ color: '#60A5FA', fontSize: '0.78rem' }}>Request ID: {selectedSub.request_id}</div>
+            {/* Target Request Header Info */}
+            <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '16px', borderRadius: '12px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <div style={{ color: '#94A3B8', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 700 }}>Target Submission</div>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem', color: '#F8FAFC', marginTop: '2px' }}>{selectedSub.project_name}</div>
+                <div style={{ color: '#60A5FA', fontSize: '0.78rem' }}>ID: {selectedSub.request_id} • Score: {selectedSub.score ?? 'N/A'}/100</div>
               </div>
 
+              {/* Action to Spectate Full Report */}
+              {onViewReport && (
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => {
+                    handleCloseModal();
+                    onViewReport(selectedSub.request_id);
+                  }}
+                  style={{ padding: '6px 14px', fontSize: '0.8rem', borderColor: '#3B82F6' }}
+                >
+                  <BookOpen size={14} color="#60A5FA" /> Spectate Full Report Page
+                </button>
+              )}
+            </div>
+
+            {/* Inline Report Preview Accordion */}
+            {modalReportText && (
+              <div style={{ marginBottom: '24px', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '12px', overflow: 'hidden' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowModalReportPreview(!showModalReportPreview)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: 'rgba(30, 41, 59, 0.8)',
+                    border: 'none',
+                    color: '#60A5FA',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FileText size={16} /> {showModalReportPreview ? 'Hide Inline Cahier des Charges Preview' : '📖 Spectate Generated Cahier des Charges Report'}
+                  </span>
+                  <span>{showModalReportPreview ? '▲' : '▼'}</span>
+                </button>
+
+                {showModalReportPreview && (
+                  <div style={{ padding: '20px', background: 'rgba(15, 23, 42, 0.9)', maxHeight: '280px', overflowY: 'auto', fontSize: '0.85rem', color: '#CBD5E1', lineHeight: 1.6 }}>
+                    <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                      {modalReportText}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitOverride}>
               {/* Decision Radio Choice */}
               <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#E2E8F0', marginBottom: '10px' }}>
-                  Override Decision Status *
+                  Select Final Engineering Decision *
                 </label>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
@@ -365,7 +451,7 @@ export default function AdminDashboard() {
               {/* Reviewer Name */}
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
-                  Reviewer Name / Title
+                  Reviewing AI Engineer Name / Title
                 </label>
                 <input
                   type="text"
@@ -384,7 +470,7 @@ export default function AdminDashboard() {
                 <textarea
                   className="glass-input"
                   rows={3}
-                  placeholder="Provide technical justification for this override..."
+                  placeholder="Provide technical rationale or operational notes for this decision..."
                   value={reviewerNotes}
                   onChange={(e) => setReviewerNotes(e.target.value)}
                 />
