@@ -14,12 +14,15 @@ app = FastAPI(
 
 
 from backend.api.routes_departments import router as departments_router
+from backend.api.routes_submissions import router as submissions_router
 
 app.include_router(departments_router, prefix="/api")
+app.include_router(submissions_router, prefix="/api")
 
 
 @app.get("/health")
 async def health_check():
     """Basic health check endpoint."""
     return {"status": "ok", "version": "0.1.0"}
+
 

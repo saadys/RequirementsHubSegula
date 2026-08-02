@@ -80,15 +80,15 @@ class FactExtraction(BaseModel):
 class FormSubmission(BaseModel):
     """What the API receives when a team submits a request."""
 
-    project_name: str
-    department: str
-    team_contact_name: str
-    team_contact_email: str
-    problem_description: str  # min 100 chars
-    current_process: str  # How they do it today
-    expected_outcome: str  # What success looks like
+    project_name: str | None = None
+    department: str | None = "corporate_support"
+    team_contact_name: str | None = None
+    team_contact_email: str | None = None
+    problem_description: str | None = None
+    current_process: str | None = None
+    expected_outcome: str | None = None
     data_description: str | None = None
-    deadline_urgency: Literal["low", "medium", "high", "critical"]
+    deadline_urgency: Literal["low", "medium", "high", "critical"] | None = "low"
     # Department-specific fields stored as flexible dict
     department_specific: dict = {}
 

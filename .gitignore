@@ -12,6 +12,8 @@ __pycache__/
 data/*.db
 data/chroma/
 checkpoints.db
+submissions_store.json
+uploads/
 
 # Node
 node_modules/
