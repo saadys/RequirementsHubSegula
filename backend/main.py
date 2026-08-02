@@ -15,9 +15,11 @@ app = FastAPI(
 
 from backend.api.routes_departments import router as departments_router
 from backend.api.routes_submissions import router as submissions_router
+from backend.api.routes_clarification import router as clarification_router
 
 app.include_router(departments_router, prefix="/api")
 app.include_router(submissions_router, prefix="/api")
+app.include_router(clarification_router, prefix="/api")
 
 
 @app.get("/health")
