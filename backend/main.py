@@ -5,6 +5,7 @@ Owner: TOGETHER (Phase 3 — Integration)
 """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="AI Requirement Hub",
@@ -12,6 +13,14 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# Enable CORS for local dev & frontend connections
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 from backend.api.routes_departments import router as departments_router
 from backend.api.routes_submissions import router as submissions_router
@@ -30,5 +39,3 @@ app.include_router(dashboard_router, prefix="/api")
 async def health_check():
     """Basic health check endpoint."""
     return {"status": "ok", "version": "0.1.0"}
-
-
