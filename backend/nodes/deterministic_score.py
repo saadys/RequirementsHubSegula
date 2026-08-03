@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 from backend.contracts.state import PipelineState
+from backend import config
 
 logger = logging.getLogger(__name__)
 
@@ -76,10 +77,13 @@ def calculate_feasibility_score(
     breakdown["integration"] = {"score": s, "max": 10}
     score += s
 
-    # Determine Routing Decision
-    if score >= 70:
+    # Determine Routing Decision dynamically from config
+    go_threshold = getattr(config, "SCORE_GO_THRESHOLD", 70)
+    nogo_threshold = getattr(config, "SCORE_NOGO_THRESHOLD", 40)
+
+    if score >= go_threshold:
         decision = "GO"
-    elif score >= 40:
+    elif score >= nogo_threshold:
         decision = "NEEDS_CLARIFICATION"
     else:
         decision = "NO_GO"
