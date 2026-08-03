@@ -1,9 +1,8 @@
 from backend.services.vectorstore import load_seed_data
 from backend.nodes.rag_search import rag_search
 
-load_seed_data()  # ensure data is loaded
+load_seed_data() 
 
-# Simulate a state that Track B's parse_input would produce
 fake_state = {
     "form_data": {
         "project_name": "Smart Recruiter",

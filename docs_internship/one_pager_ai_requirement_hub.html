@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One-Pager — Segula AI Requirement Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
+  
+  <style>
+    /* ── RESET & BASE STYLES ───────────────────────────────────────── */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #070B19;
+      color: #1E293B;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 10px;
+    }
+
+    /* ── 16:9 LANDSCAPE CONTAINER (SLIDE / ONE-PAGER) ─────────────── */
+    .one-pager-container {
+      width: 1280px;
+      height: 720px;
+      background: #FFFFFF;
+      border-radius: 12px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 12px 20px 10px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ── HEADER BANNER ─────────────────────────────────────────────── */
+    .header-banner {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 14px;
+      align-items: center;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 10px;
+    }
+
+    .hero-image-box {
+      width: 100%;
+      height: 75px;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.08);
+      border: 1px solid #CBD5E1;
+    }
+
+    .hero-image-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .title-box {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .title-box h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 800;
+      line-height: 1.2;
+      color: #0F172A;
+    }
+
+    .title-box h1 span.highlight {
+      background: linear-gradient(135deg, #2563EB 0%, #7C3AED 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .title-box p.subtitle {
+      font-size: 0.74rem;
+      color: #475569;
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    /* ── MAIN CONTENT GRID (2 COLUMNS) ────────────────────────────── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .left-column, .right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .section-card {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 8px 12px;
+      position: relative;
+    }
+
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: #0F172A;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .section-title .bullet {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #2563EB;
+      display: inline-block;
+    }
+
+    /* List styling */
+    .styled-list {
+      list-style: none;
+    }
+
+    .styled-list li {
+      font-size: 0.71rem;
+      color: #334155;
+      line-height: 1.3;
+      margin-bottom: 2px;
+      position: relative;
+      padding-left: 10px;
+    }
+
+    .styled-list li::before {
+      content: "•";
+      color: #2563EB;
+      font-weight: bold;
+      position: absolute;
+      left: 0;
+    }
+
+    /* ── WORKFLOW STEPS (METHODE DE TRAVAIL) ───────────────────────── */
+    .workflow-container {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .workflow-step {
+      background: #F1F5F9;
+      border: 1px solid #CBD5E1;
+      border-radius: 6px;
+      padding: 6px 4px;
+      text-align: center;
+    }
+
+    .workflow-step .phase-tag {
+      background: #2563EB;
+      color: white;
+      font-size: 0.58rem;
+      font-weight: 800;
+      padding: 1px 4px;
+      border-radius: 3px;
+      display: inline-block;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+    }
+
+    .workflow-step .step-title {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #0F172A;
+      margin-bottom: 2px;
+    }
+
+    .workflow-step .step-desc {
+      font-size: 0.62rem;
+      color: #64748B;
+      line-height: 1.15;
+    }
+
+    /* ── FOOTER BRANDING BAR ──────────────────────────────────────── */
+    .footer-bar {
+      height: 32px;
+      background: #070B19;
+      border-radius: 6px;
+      margin-top: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 14px;
+      color: #FFFFFF;
+    }
+
+    .logo-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 0.85rem;
+      letter-spacing: 0.05em;
+    }
+
+    .logo-group span.highlight {
+      color: #38BDF8;
+    }
+
+    .footer-metadata {
+      font-size: 0.68rem;
+      color: #94A3B8;
+      font-weight: 500;
+    }
+
+    /* ── PRINT BUTTON (HIDDEN ON PRINT) ────────────────────────────── */
+    .no-print-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .no-print-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(37, 99, 235, 0.6);
+    }
+
+    /* ── PRINT MEDIA QUERY ─────────────────────────────────────────── */
+    @media print {
+      @page {
+        size: A4 landscape;
+        margin: 0;
+      }
+      body {
+        background: none;
+        padding: 0;
+      }
+      .one-pager-container {
+        width: 100vw;
+        height: 100vh;
+        box-shadow: none;
+        border-radius: 0;
+        padding: 10px 16px;
+      }
+      .no-print-btn {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Floating Print Button -->
+  <button class="no-print-btn" onclick="window.print()">
+    🖨️ Imprimer / Exporter en PDF
+  </button>
+
+  <div class="one-pager-container">
+    
+    <!-- Header Banner -->
+    <header class="header-banner">
+      <div class="hero-image-box">
+        <img src="assets/one_pager_hero_banner.png" alt="Segula AI Requirement Hub Dashboard">
+      </div>
+      <div class="title-box">
+        <h1>
+          Conception d'une Plateforme <span class="highlight">Multi-Agents IA</span> d'Évaluation Déterministe et de Cadrage Automatique des Besoins (AI Requirement Hub)
+        </h1>
+        <p class="subtitle">
+          Système intelligent d'aide à la décision, scoring sur 7 critères & génération automatique de Cahier des Charges technique.
+        </p>
+      </div>
+    </header>
+
+    <!-- Main Content Grid (2 Columns) -->
+    <div class="main-grid">
+      
+      <!-- Left Column: Methode de travail & Workflow -->
+      <div class="left-column">
+        <div class="section-card" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div class="section-title">
+              <span class="bullet"></span> Méthode de travail & Architecture Système :
+            </div>
+            
+            <div class="workflow-container">
+              <div class="workflow-step">
+                <span class="phase-tag">Phase 1</span>
+                <div class="step-title">Ingestion Métier</div>
+                <div class="step-desc">Formulaire dynamique par département & parsing PDF.</div>
+              </div>
+
+              <div class="workflow-step">
+                <span class="phase-tag">Phase 2</span>
+                <div class="step-title">LangGraph & RAG</div>
+                <div class="step-desc">FactExtraction & recherche vectorielle ChromaDB.</div>
+              </div>
+
+              <div class="workflow-step">
+                <span class="phase-tag">Phase 3</span>
+                <div class="step-title">Scoring & Q&A</div>
+                <div class="step-desc">Scoring 0-100 (7 critères) & clarification multi-tours.</div>
+              </div>
+
+              <div class="workflow-step">
+                <span class="phase-tag">Phase 4</span>
+                <div class="step-title">Cahier des Charges</div>
+                <div class="step-desc">Rédaction Markdown & Dashboard d'override IA.</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="background: #F8FAFC; padding: 8px 10px; border-radius: 6px; border-left: 4px solid #2563EB; margin-top: 8px;">
+            <div style="font-size: 0.74rem; font-weight: 700; color: #0F172A; margin-bottom: 2px;">
+              💡 Moteur d'Orchestration Hybride (RAG + Scoring Déterministe)
+            </div>
+            <div style="font-size: 0.68rem; color: #475569; line-height: 1.25;">
+              Séparation stricte entre l'analyse factuelle par l'agent LLM et la décision calculée par du code Python explicable pour éviter toute hallucination.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Problematique, Plan d'action, Gains attendus -->
+      <div class="right-column">
+        
+        <!-- Problematique -->
+        <div class="section-card">
+          <div class="section-title">
+            <span class="bullet" style="background: #EF4444;"></span> Problématique :
+          </div>
+          <ul class="styled-list">
+            <li><strong>Hétérogénéité des demandes :</strong> Formulaires métiers imprécis et manque de structuration.</li>
+            <li><strong>Temps de cadrage manuel :</strong> 1 à 2 semaines d'échanges chronophages par projet IA.</li>
+            <li><strong>Incertitude de faisabilité :</strong> Évaluation complexe des données et de la solvabilité IA en amont.</li>
+            <li><strong>Absence de traçabilité :</strong> Décisions subjectives sans métriques quantifiables.</li>
+          </ul>
+        </div>
+
+        <!-- Plan d'action -->
+        <div class="section-card">
+          <div class="section-title">
+            <span class="bullet" style="background: #F59E0B;"></span> Plan d'action :
+          </div>
+          <ul class="styled-list">
+            <li><strong>Conception Portail Métier :</strong> Interface React/Glassmorphism avec sélecteur dynamique.</li>
+            <li><strong>Pipeline LangGraph & RAG :</strong> Orchestration synchrone et recherche ChromaDB.</li>
+            <li><strong>Clarification Multi-Tours :</strong> Reformulation ciblée de questions si score entre 40 et 69.</li>
+            <li><strong>Génération & Override Admin :</strong> Export Markdown & console de validation IA.</li>
+          </ul>
+        </div>
+
+        <!-- Gains attendus -->
+        <div class="section-card">
+          <div class="section-title">
+            <span class="bullet" style="background: #10B981;"></span> Gains attendus :
+          </div>
+          <ul class="styled-list">
+            <li><strong>Gain de temps massif (95%) :</strong> Cadrage automatisé d'un besoin en ~10 secondes.</li>
+            <li><strong>Scoring 100% Explicable :</strong> Matrice basée sur 7 critères déterministes pondérés.</li>
+            <li><strong>Standardisation Technique :</strong> Cahier des Charges directement exploitable.</li>
+            <li><strong>Supervision Humaine :</strong> Contrôle et override garanti via le Dashboard Admin IA.</li>
+          </ul>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Footer Bar -->
+    <footer class="footer-bar">
+      <div class="logo-group">
+        SEGULA <span class="highlight">TECHNOLOGIES</span>
+      </div>
+      <div class="footer-metadata">
+        AI Requirement Hub — Synthèse d'Architecture & Rapport de Stage | Année 2026
+      </div>
+    </footer>
+
+  </div>
+
+</body>
+</html>
