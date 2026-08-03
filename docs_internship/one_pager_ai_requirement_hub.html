@@ -212,6 +212,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 6px;
       margin-top: 6px;
+      margin-bottom: 10px;
     }
 
     .tech-item {
@@ -239,7 +240,7 @@
 
     /* ── FOOTER BRANDING BAR ──────────────────────────────────────── */
     .footer-bar {
-      height: 32px;
+      height: 34px;
       background: #070B19;
       border-radius: 6px;
       margin-top: 8px;
@@ -301,10 +302,10 @@
       </div>
       <div class="title-box">
         <h1>
-          Conception d'une Plateforme <span class="highlight">Multi-Agents IA</span> d'Évaluation Déterministe et de Cadrage Automatique des Besoins (AI Requirement Hub)
+          Conception d'une Plateforme <span class="highlight">d'Orchestration IA Hybride (LangGraph & RAG)</span> d'Évaluation Déterministe et de Cadrage Automatique des Besoins (AI Requirement Hub)
         </h1>
         <p class="subtitle">
-          Système intelligent d'aide à la décision, scoring sur 7 critères & génération automatique de Cahier des Charges technique.
+          Système d'aide à la décision, scoring déterministe sur 7 critères & génération automatique de Cahier des Charges technique.
         </p>
       </div>
     </header>
@@ -314,70 +315,70 @@
       
       <!-- Left Column: Methode de travail & Architecture Système -->
       <div class="left-column">
-        <div class="section-card" style="height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
-          <div>
-            <div class="section-title">
-              <span class="bullet"></span> Méthode de travail & Workflow Applicatif :
-            </div>
-            
-            <div class="workflow-container">
-              <div class="workflow-step">
-                <span class="phase-tag">Phase 1</span>
-                <div class="step-title">Ingestion Métier</div>
-                <div class="step-desc">Formulaire dynamique par département & parsing PDF.</div>
-              </div>
-
-              <div class="workflow-step">
-                <span class="phase-tag">Phase 2</span>
-                <div class="step-title">LangGraph & RAG</div>
-                <div class="step-desc">FactExtraction & recherche vectorielle ChromaDB.</div>
-              </div>
-
-              <div class="workflow-step">
-                <span class="phase-tag">Phase 3</span>
-                <div class="step-title">Scoring & Q&A</div>
-                <div class="step-desc">Scoring 0-100 (7 critères) & clarification multi-tours.</div>
-              </div>
-
-              <div class="workflow-step">
-                <span class="phase-tag">Phase 4</span>
-                <div class="step-title">Cahier des Charges</div>
-                <div class="step-desc">Rédaction Markdown & Dashboard d'override IA.</div>
-              </div>
+        <div class="section-card">
+          <div class="section-title">
+            <span class="bullet"></span> Méthode de travail & Workflow Applicatif :
+          </div>
+          
+          <div class="workflow-container">
+            <div class="workflow-step">
+              <span class="phase-tag">Phase 1</span>
+              <div class="step-title">Ingestion Métier</div>
+              <div class="step-desc">Formulaire dynamique par département & parsing PDF.</div>
             </div>
 
-            <div class="section-title" style="margin-top: 10px;">
-              <span class="bullet" style="background: #7C3AED;"></span> Composants Techniques Clés (Tech Stack) :
+            <div class="workflow-step">
+              <span class="phase-tag">Phase 2</span>
+              <div class="step-title">Stateful Graph & RAG</div>
+              <div class="step-desc">FactExtraction Pydantic & recherche vectorielle ChromaDB.</div>
             </div>
 
-            <div class="tech-stack-grid">
-              <div class="tech-item">
-                <div class="tech-name">⚛️ Frontend React & Vite</div>
-                <div class="tech-desc">Interface Glassmorphic corporate, portail métiers & visualiseur de score.</div>
-              </div>
-              <div class="tech-item">
-                <div class="tech-name">🦜 Pipeline LangGraph & Agent</div>
-                <div class="tech-desc">Workflow synchrone orchestrant l'analyse factuelle Gemini 3.1 & RAG.</div>
-              </div>
-              <div class="tech-item">
-                <div class="tech-name">🔍 VectorStore ChromaDB</div>
-                <div class="tech-desc">Recherche RAG basée sur l'historique des projets IA de Segula Technologies.</div>
-              </div>
-              <div class="tech-item">
-                <div class="tech-name">⚖️ Calculateur Déterministe</div>
-                <div class="tech-desc">Validation Pydantic (FactExtraction) & scoring explicable à 7 dimensions.</div>
-              </div>
+            <div class="workflow-step">
+              <span class="phase-tag">Phase 3</span>
+              <div class="step-title">Scoring & Q&A</div>
+              <div class="step-desc">Scoring 0-100 (7 critères) & clarification multi-tours.</div>
+            </div>
+
+            <div class="workflow-step">
+              <span class="phase-tag">Phase 4</span>
+              <div class="step-title">Cahier des Charges</div>
+              <div class="step-desc">Rédaction Markdown & Dashboard d'override ingénieur IA.</div>
             </div>
           </div>
 
-          <div style="background: #F8FAFC; padding: 8px 10px; border-radius: 6px; border-left: 4px solid #2563EB; margin-top: 8px;">
+          <div class="section-title">
+            <span class="bullet" style="background: #7C3AED;"></span> Composants Techniques Clés (Tech Stack) :
+          </div>
+
+          <div class="tech-stack-grid">
+            <div class="tech-item">
+              <div class="tech-name">⚛️ Frontend React & Vite</div>
+              <div class="tech-desc">Interface Glassmorphic corporate, portail métiers & visualiseur de score.</div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-name">🦜 Pipeline LangGraph (Graph d'États)</div>
+              <div class="tech-desc">Workflow synchrone d'analyse factuelle Gemini 3.1 & RAG.</div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-name">🔍 VectorStore ChromaDB (RAG)</div>
+              <div class="tech-desc">Recherche sémantique sur l'historique des projets IA Segula.</div>
+            </div>
+            <div class="tech-item">
+              <div class="tech-name">⚖️ Calculateur Déterministe Python</div>
+              <div class="tech-desc">Validation FactExtraction & scoring explicable à 7 dimensions.</div>
+            </div>
+          </div>
+
+          <!-- Callout Box Placed Immediately Below Tech Stack -->
+          <div style="background: #F8FAFC; padding: 8px 10px; border-radius: 6px; border-left: 4px solid #2563EB;">
             <div style="font-size: 0.74rem; font-weight: 700; color: #0F172A; margin-bottom: 2px;">
               💡 Moteur d'Orchestration Hybride (RAG + Scoring Déterministe)
             </div>
             <div style="font-size: 0.68rem; color: #475569; line-height: 1.25;">
-              Séparation stricte entre l'analyse factuelle par l'agent LLM et la décision calculée par du code Python explicable pour éviter toute hallucination.
+              Séparation stricte entre l'extraction factuelle par le modèle LLM et la décision calculée par du code Python explicable pour éliminer les hallucinations.
             </div>
           </div>
+
         </div>
       </div>
 
