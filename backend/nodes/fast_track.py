@@ -8,6 +8,7 @@ Owner: Track A
 """
 
 from backend.contracts.state import PipelineState
+from backend import config
 
 
 def fast_track(state: PipelineState) -> dict:
@@ -19,6 +20,8 @@ def fast_track(state: PipelineState) -> dict:
     contact_person = project.get("contact_person", "Segula AI Team")
     outcome = project.get("outcome", "Successful")
     
+    match_pct = int(getattr(config, "RAG_EXACT_MATCH_THRESHOLD", 0.75) * 100)
+    
     ai_techniques = project.get("ai_techniques", [])
     if isinstance(ai_techniques, list):
         techniques_formatted = "\n".join(f"- {t}" for t in ai_techniques) if ai_techniques else "- General AI/ML"
@@ -27,7 +30,7 @@ def fast_track(state: PipelineState) -> dict:
         
     report_text = f"""# 🚀 Fast Track Evaluation: Existing Solution Identified
 
-An existing AI solution matching your requirement with high confidence (>=95% similarity) has already been implemented within Segula Technologies.
+An existing AI solution matching your requirement with high confidence (>={match_pct}% similarity) has already been implemented within Segula Technologies.
 
 ### 📌 Project Details
 - **Project Name:** {project_name}

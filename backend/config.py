@@ -37,7 +37,7 @@ MAX_CLARIFICATION_ROUNDS = 2
 
 # ── RAG Settings ─────────────────────────────────────────────────
 
-RAG_EXACT_MATCH_THRESHOLD = 0.95
+RAG_EXACT_MATCH_THRESHOLD = 0.75
 RAG_SIMILAR_THRESHOLD = 0.60
 RAG_TOP_K = 5
 CHROMA_COLLECTION_NAME = "historic_projects"

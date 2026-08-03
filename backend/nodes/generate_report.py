@@ -66,7 +66,10 @@ def generate_report(state: PipelineState) -> dict:
             p_name = proj.get("project_name", "Past Project")
             p_sol = proj.get("solution_description", "No summary")
             p_contact = proj.get("contact_person", "Segula AI Team")
-            similar_str_list.append(f"- **{p_name}**: {p_sol} *(Contact: {p_contact})*")
+            p_score = proj.get("similarity_percentage")
+            
+            score_text = f" *(Similarity Score: {p_score}%)*" if p_score is not None else ""
+            similar_str_list.append(f"- **{p_name}**{score_text}: {p_sol} *(Contact: {p_contact})*")
         similar_str = "\n".join(similar_str_list)
     else:
         similar_str = "- No similar past projects found in ChromaDB matching the similarity threshold (>= 0.60)."

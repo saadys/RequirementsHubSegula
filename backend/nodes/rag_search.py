@@ -40,7 +40,10 @@ def rag_search(state: PipelineState) -> dict:
         
         # Only include projects that meet or exceed RAG_SIMILAR_THRESHOLD
         if score_val >= similarity_threshold:
-            similar_projects.append(meta)
+            meta_copy = meta.copy() if meta else {}
+            meta_copy["similarity_score"] = round(score_val, 4)
+            meta_copy["similarity_percentage"] = round(score_val * 100, 1)
+            similar_projects.append(meta_copy)
         
         # Check if score meets exact match threshold (e.g., >= 0.95)
         if score_val >= config.RAG_EXACT_MATCH_THRESHOLD and not is_exact_match:

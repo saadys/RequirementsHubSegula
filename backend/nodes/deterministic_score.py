@@ -51,9 +51,12 @@ def calculate_feasibility_score(
 
     # 4. Similar project / Prior Art (Max 15 pts)
     max_rag = max(rag_scores) if rag_scores else 0.0
-    if max_rag >= 0.95:
+    exact_threshold = getattr(config, "RAG_EXACT_MATCH_THRESHOLD", 0.75)
+    similar_threshold = getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60)
+    
+    if max_rag >= exact_threshold:
         s = 15  # Exact existing solution
-    elif max_rag >= 0.60:
+    elif max_rag >= similar_threshold:
         s = 12  # Similar prior art exists
     else:
         s = 5   # Novel project (low penalty)
