@@ -69,7 +69,7 @@ def generate_report(state: PipelineState) -> dict:
             similar_str_list.append(f"- **{p_name}**: {p_sol} *(Contact: {p_contact})*")
         similar_str = "\n".join(similar_str_list)
     else:
-        similar_str = "- No similar past projects found in ChromaDB."
+        similar_str = "- No similar past projects found in ChromaDB matching the similarity threshold (>= 0.60)."
 
     report_markdown = f"""# 📄 AI Project Feasibility Report: {project_name}
 
