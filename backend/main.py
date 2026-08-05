@@ -1,19 +1,54 @@
 """
 FastAPI Application Entry Point
 
-Owner: TOGETHER (Phase 3 — Integration)
+Modern Lifespan Events (startup / shutdown) & Flat Architecture.
 """
 
+from contextlib import asynccontextmanager
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.api import api_router
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("backend.main")
+
+
+async def startup_span(app: FastAPI):
+    """Tâches exécutées au démarrage de l'application (ex: connexions DB, services)."""
+    logger.info(" Démarrage de l'application AI Requirement Hub...")
+    # Emplacement futur pour l'initialisation des clients / DB :
+    # app.db_engine = ...
+
+
+async def shutdown_span(app: FastAPI):
+    """Tâches exécutées à l'arrêt de l'application (ex: fermeture des connexions)."""
+    logger.info(" Arrêt de l'application AI Requirement Hub...")
+    # Emplacement futur pour le nettoyage :
+    # await app.db_engine.dispose()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Gestionnaire moderne du cycle de vie de l'application FastAPI.
+    Remplace les événements dépréciés @app.on_event("startup") et ("shutdown").
+    """
+    await startup_span(app)
+    yield
+    await shutdown_span(app)
+
+
+# Instanciation de l'application FastAPI avec le gestionnaire de cycle de vie
 app = FastAPI(
     title="AI Requirement Hub",
     description="AI-powered intermediary tool between business teams and the AI team at Segula Technologies",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
-# Enable CORS for local dev & frontend connections
+# Configuration CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,20 +57,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from backend.api.routes_departments import router as departments_router
-from backend.api.routes_submissions import router as submissions_router
-from backend.api.routes_clarification import router as clarification_router
-from backend.api.routes_reports import router as reports_router
-from backend.api.routes_dashboard import router as dashboard_router
-
-app.include_router(departments_router, prefix="/api")
-app.include_router(submissions_router, prefix="/api")
-app.include_router(clarification_router, prefix="/api")
-app.include_router(reports_router, prefix="/api")
-app.include_router(dashboard_router, prefix="/api")
-
-
-@app.get("/health")
-async def health_check():
-    """Basic health check endpoint."""
-    return {"status": "ok", "version": "0.1.0"}
+# Inclure les routeurs
+app.include_router(api_router)
