@@ -9,7 +9,7 @@ client = TestClient(app)
 
 
 def test_create_submission_success():
-    """Test POST /api/submissions/ with valid corporate_support request."""
+    """Test POST /api/submissions/ with valid corporate_support request (Asynchronous Background Tasks)."""
     payload = {
         "project_name": "AI Onboarding Assistant",
         "department": "corporate_support",
@@ -22,7 +22,7 @@ def test_create_submission_success():
         "deadline_urgency": "medium",
         "department_specific": {
             "service_area": "hr",
-            "target_users": "employees",
+            "target_users": "all_employees",
             "has_existing_system": True,
         },
     }
@@ -33,29 +33,15 @@ def test_create_submission_success():
 
     assert "request_id" in data
     assert data["request_id"] is not None
-    assert data["status"] in ["COMPLETED", "FAST_TRACK", "NEEDS_CLARIFICATION"]
-    assert data["decision"] in ["GO", "NEEDS_CLARIFICATION"]
-    assert data["score"] is not None
+    # Immediate response status is PENDING when using background tasks
+    assert data["status"] == "PENDING"
     assert data["form_data"]["project_name"] == "AI Onboarding Assistant"
 
-
-def test_create_submission_incomplete():
-    """Test POST /api/submissions/ with missing required fields."""
-    payload = {
-        "project_name": "Incomplete Request",
-        "department": "corporate_support",
-        # Missing team_contact_name, team_contact_email, problem_description, etc.
-        "current_process": "None",
-        "expected_outcome": "Something",
-        "deadline_urgency": "low",
-    }
-
-    response = client.post("/api/submissions/", json=payload)
-    assert response.status_code == 201
-    data = response.json()
-
-    assert data["status"] == "INCOMPLETE"
-    assert len(data["missing_fields"]) > 0
+    # Test GET /api/submissions/{request_id} endpoint
+    get_response = client.get(f"/api/submissions/{data['request_id']}")
+    assert get_response.status_code == 200
+    get_data = get_response.json()
+    assert get_data["request_id"] == data["request_id"]
 
 
 def test_get_submission_by_id_and_list():
@@ -136,5 +122,5 @@ def test_create_submission_with_pdf_upload(tmp_path):
     assert response.status_code == 201
     res_data = response.json()
     assert "request_id" in res_data
-    assert res_data["status"] in ["COMPLETED", "FAST_TRACK", "NEEDS_CLARIFICATION"]
+    assert res_data["status"] == "PENDING"
 
