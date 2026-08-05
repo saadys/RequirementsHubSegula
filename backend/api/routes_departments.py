@@ -7,35 +7,11 @@ Provides department list and field definitions for dynamic forms.
 import json
 from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
 
 from backend.config import DEPARTMENT_CONFIGS_PATH
+from backend.schemas import DepartmentDetail, DepartmentSummary, SpecificField
 
 router = APIRouter(prefix="/departments", tags=["Departments"])
-
-
-class DepartmentSummary(BaseModel):
-    id: str = Field(..., description="Unique department identifier")
-    display_name: str = Field(..., description="Human-readable department name")
-    description: str = Field(..., description="Brief description of department scope")
-    enabled: bool = Field(..., description="Whether department form is currently active")
-
-
-class SpecificField(BaseModel):
-    name: str
-    label: str
-    type: str
-    options: List[str] = []
-    required: bool = False
-
-
-class DepartmentDetail(BaseModel):
-    id: str
-    display_name: str
-    description: str
-    enabled: bool
-    specific_fields: List[SpecificField] = []
-    required_base_fields: List[str] = []
 
 
 def _load_department_configs() -> Dict[str, Any]:

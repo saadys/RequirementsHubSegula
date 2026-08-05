@@ -1,7 +1,7 @@
 from litellm import Router
 from langchain_litellm import ChatLiteLLMRouter
 from backend import config
-from backend.contracts.schemas import FactExtraction, ClarificationQuestions
+from backend.schemas import FactExtraction, ClarificationQuestions
 
 model_list = []
 

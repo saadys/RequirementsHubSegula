@@ -1,56 +1,16 @@
-"""
-Dashboard API Routes (AI Engineering Team)
-
-Provides endpoints for AI engineers to monitor pending AI requests
-and manually override Go/No-Go decisions.
-"""
-
-from typing import Any, Dict, List, Literal, Optional
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
 
+from backend.schemas import (
+    Decision,
+    DecisionOverrideInput,
+    DecisionOverrideResponse,
+    PendingSubmissionItem,
+    SubmissionStatus,
+)
 from backend.services.storage import get_submission, list_submissions, save_submission
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
-
-
-class DecisionOverrideInput(BaseModel):
-    decision: Literal["GO", "NO_GO", "NEEDS_CLARIFICATION"] = Field(
-        ..., description="New decision status override by AI engineer"
-    )
-    reviewer_notes: Optional[str] = Field(
-        None, description="Optional feedback or rationale from the AI engineer"
-    )
-    reviewer_name: Optional[str] = Field(
-        "AI Engineer", description="Name or ID of the reviewing AI engineer"
-    )
-
-
-class DecisionOverrideResponse(BaseModel):
-    request_id: str
-    decision: str
-    status: str
-    score: Optional[int] = None
-    reviewer_notes: Optional[str] = None
-    reviewer_name: Optional[str] = None
-    manual_override: bool = True
-    updated_at: Optional[str] = None
-
-
-class PendingSubmissionItem(BaseModel):
-    request_id: str
-    project_name: Optional[str] = "Untitled Project"
-    department: Optional[str] = "corporate_support"
-    team_contact_name: Optional[str] = "N/A"
-    team_contact_email: Optional[str] = "N/A"
-    status: str
-    decision: Optional[str] = None
-    score: Optional[int] = None
-    clarification_round: int = 0
-    created_at: Optional[str] = None
-    missing_fields: List[str] = []
-    has_report: bool = False
-    report_type: Optional[str] = None
 
 
 @router.get(
@@ -65,19 +25,22 @@ async def list_pending_requests(status_filter: Optional[str] = None):
 
     for sub in all_subs:
         dec = sub.get("decision")
-        stat = sub.get("status", "PROCESSED")
+        stat = sub.get("status", SubmissionStatus.PROCESSED.value)
 
         # Determine matching based on status filter
         if status_filter and status_filter.upper() != "ALL":
             sf = status_filter.upper()
-            if sf == "GO":
-                matches = stat in ["COMPLETED", "GO"] or dec == "GO"
-            elif sf == "NO_GO" or sf == "REJECTED":
-                matches = stat in ["REJECTED", "NO_GO"] or dec == "NO_GO"
-            elif sf == "NEEDS_CLARIFICATION":
-                matches = stat == "NEEDS_CLARIFICATION" or dec == "NEEDS_CLARIFICATION"
-            elif sf == "INCOMPLETE":
-                matches = stat == "INCOMPLETE" or bool(sub.get("missing_fields"))
+            if sf == Decision.GO.value:
+                matches = stat in [SubmissionStatus.COMPLETED.value, Decision.GO.value] or dec == Decision.GO.value
+            elif sf in [Decision.NO_GO.value, SubmissionStatus.REJECTED.value]:
+                matches = stat in [SubmissionStatus.REJECTED.value, Decision.NO_GO.value] or dec == Decision.NO_GO.value
+            elif sf == Decision.NEEDS_CLARIFICATION.value:
+                matches = (
+                    stat == SubmissionStatus.NEEDS_CLARIFICATION.value
+                    or dec == Decision.NEEDS_CLARIFICATION.value
+                )
+            elif sf == SubmissionStatus.INCOMPLETE.value:
+                matches = stat == SubmissionStatus.INCOMPLETE.value or bool(sub.get("missing_fields"))
             else:
                 matches = stat == sf or dec == sf
             if not matches:
@@ -123,12 +86,12 @@ async def override_submission_decision(
         )
 
     state["decision"] = payload.decision
-    if payload.decision == "GO":
-        state["status"] = "COMPLETED"
-    elif payload.decision == "NO_GO":
-        state["status"] = "REJECTED"
-    elif payload.decision == "NEEDS_CLARIFICATION":
-        state["status"] = "NEEDS_CLARIFICATION"
+    if payload.decision == Decision.GO.value:
+        state["status"] = SubmissionStatus.COMPLETED.value
+    elif payload.decision == Decision.NO_GO.value:
+        state["status"] = SubmissionStatus.REJECTED.value
+    elif payload.decision == Decision.NEEDS_CLARIFICATION.value:
+        state["status"] = SubmissionStatus.NEEDS_CLARIFICATION.value
 
     state["reviewer_notes"] = payload.reviewer_notes
     state["reviewer_name"] = payload.reviewer_name

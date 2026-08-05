@@ -6,50 +6,28 @@ Handles multi-turn clarification loops for submissions requiring additional cont
 
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
-
 from backend.config import MAX_CLARIFICATION_ROUNDS
 from backend.graph.builder import get_compiled_graph
+from backend.schemas import ClarificationAnswerInput, ClarificationResponse, Decision, SubmissionStatus
 from backend.services.storage import get_submission, save_submission
 
 router = APIRouter(prefix="/submissions", tags=["Clarification"])
 
 
-class ClarificationAnswerInput(BaseModel):
-    answers: List[str] = Field(
-        ...,
-        description="List of text answers responding to each clarification question",
-        min_length=1,
-    )
-
-
-class ClarificationResponse(BaseModel):
-    request_id: str
-    status: str
-    clarification_round: int
-    max_rounds: int = MAX_CLARIFICATION_ROUNDS
-    questions: List[str] = []
-    answers: List[str] = []
-    score: Optional[int] = None
-    decision: Optional[str] = None
-    report_type: Optional[str] = None
-    report: Optional[str] = None
-
-
 def _determine_status(result_state: Dict[str, Any]) -> str:
     """Derives overall user-facing status from pipeline result state."""
     if result_state.get("missing_fields"):
-        return "INCOMPLETE"
+        return SubmissionStatus.INCOMPLETE.value
     if result_state.get("is_exact_match"):
-        return "FAST_TRACK"
+        return SubmissionStatus.FAST_TRACK.value
     decision = result_state.get("decision")
-    if decision == "GO":
-        return "COMPLETED"
-    elif decision == "NO_GO":
-        return "REJECTED"
-    elif decision == "NEEDS_CLARIFICATION":
-        return "NEEDS_CLARIFICATION"
-    return "PROCESSED"
+    if decision == Decision.GO.value:
+        return SubmissionStatus.COMPLETED.value
+    elif decision == Decision.NO_GO.value:
+        return SubmissionStatus.REJECTED.value
+    elif decision == Decision.NEEDS_CLARIFICATION.value:
+        return SubmissionStatus.NEEDS_CLARIFICATION.value
+    return SubmissionStatus.PROCESSED.value
 
 
 @router.get(

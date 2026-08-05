@@ -7,44 +7,11 @@ and detailed 7-criterion feasibility scores for submissions.
 
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
 
+from backend.schemas import ReportResponse, ScoreResponse
 from backend.services.storage import get_submission
 
 router = APIRouter(prefix="/submissions", tags=["Reports & Scores"])
-
-
-class ReportResponse(BaseModel):
-    request_id: str
-    report_type: Optional[str] = Field(
-        None, description="Type of report generated: FULL_CAHIER_DES_CHARGES, FAST_TRACK_SOLUTION, NO_GO_SUMMARY"
-    )
-    report: Optional[str] = Field(
-        None, description="Full Markdown content of the report"
-    )
-    decision: Optional[str] = Field(
-        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION"
-    )
-    is_available: bool = Field(
-        False, description="Whether the report has been generated and is ready for download"
-    )
-
-
-class ScoreResponse(BaseModel):
-    request_id: str
-    score: Optional[int] = Field(
-        None, description="Overall feasibility score (0-100)"
-    )
-    percentage: Optional[int] = Field(
-        None, description="Overall score percentage"
-    )
-    decision: Optional[str] = Field(
-        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION"
-    )
-    breakdown: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="7-criterion score breakdown dict detailing criteria points and maximums",
-    )
 
 
 @router.get(

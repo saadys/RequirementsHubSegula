@@ -10,74 +10,72 @@ import os
 import uuid
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel
-
 from backend.config import DATA_DIR
-from backend.contracts.schemas import FormSubmission
 from backend.graph.builder import get_compiled_graph
+from backend.schemas import Decision, FormSubmission, SubmissionResponse, SubmissionStatus
 from backend.services.storage import (
     get_submission,
     list_submissions,
     save_submission,
 )
 
+import logging
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
+
+logger = logging.getLogger(__name__)
+
+
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
-
-
-class SubmissionResponse(BaseModel):
-    request_id: str
-    status: str
-    decision: Optional[str] = None
-    score: Optional[int] = None
-    report_type: Optional[str] = None
-    missing_fields: List[str] = []
-    clarification_questions: List[str] = []
-    parsed_files_text: List[str] = []
-    report: Optional[str] = None
-    created_at: Optional[str] = None
-    form_data: Dict[str, Any] = {}
 
 
 def _determine_status(result_state: Dict[str, Any]) -> str:
     """Derives overall user-facing status from pipeline result state."""
     if result_state.get("missing_fields"):
-        return "INCOMPLETE"
+        return SubmissionStatus.INCOMPLETE.value
     if result_state.get("is_exact_match"):
-        return "FAST_TRACK"
+        return SubmissionStatus.FAST_TRACK.value
     decision = result_state.get("decision")
-    if decision == "GO":
-        return "COMPLETED"
-    elif decision == "NO_GO":
-        return "REJECTED"
-    elif decision == "NEEDS_CLARIFICATION":
-        return "NEEDS_CLARIFICATION"
-    return "PROCESSED"
+    if decision == Decision.GO.value:
+        return SubmissionStatus.COMPLETED.value
+    elif decision == Decision.NO_GO.value:
+        return SubmissionStatus.REJECTED.value
+    elif decision == Decision.NEEDS_CLARIFICATION.value:
+        return SubmissionStatus.NEEDS_CLARIFICATION.value
+    return SubmissionStatus.PROCESSED.value
 
 
-def _run_pipeline(
-    form_dict: Dict[str, Any], uploaded_file_paths: List[str]
-) -> Dict[str, Any]:
-    """Executes the compiled LangGraph pipeline for a submission."""
-    request_id = str(uuid.uuid4())
-    initial_state = {
-        "request_id": request_id,
-        "form_data": form_dict,
-        "department": form_dict.get("department", "corporate_support"),
-        "uploaded_files": uploaded_file_paths,
-        "clarification_round": 0,
-        "clarification_answers": [],
-    }
 
-    graph = get_compiled_graph()
-    result_state = graph.invoke(initial_state)
 
-    status_str = _determine_status(result_state)
-    result_state["status"] = status_str
-    result_state["request_id"] = request_id
+def _execute_pipeline_in_background(
+    request_id: str, form_dict: Dict[str, Any], uploaded_file_paths: List[str]
+):
+    """Executes the compiled LangGraph pipeline asynchronously in a background task."""
+    try:
+        initial_state = {
+            "request_id": request_id,
+            "form_data": form_dict,
+            "department": form_dict.get("department", "corporate_support"),
+            "uploaded_files": uploaded_file_paths,
+            "clarification_round": 0,
+            "clarification_answers": [],
+        }
 
-    # Persist in storage
-    saved_state = save_submission(request_id, result_state)
-    return saved_state
+        graph = get_compiled_graph()
+        result_state = graph.invoke(initial_state)
+
+        status_str = _determine_status(result_state)
+        result_state["status"] = status_str
+        result_state["request_id"] = request_id
+
+        # Persist updated state with final results
+        save_submission(request_id, result_state)
+        logger.info(f"Background task finished for request {request_id}. Status: {status_str}")
+    except Exception as e:
+        logger.error(f"Error in background pipeline execution for request {request_id}: {e}")
+        error_state = get_submission(request_id) or {"request_id": request_id, "form_data": form_dict}
+        error_state["status"] = "FAILED"
+        error_state["error"] = str(e)
+        save_submission(request_id, error_state)
 
 
 @router.post(
@@ -86,23 +84,27 @@ def _run_pipeline(
     status_code=status.HTTP_201_CREATED,
     summary="Submit a new AI project request (JSON)",
 )
-async def submit_request(submission: FormSubmission):
-    """Submits a new AI project request as JSON, runs the LangGraph pipeline, and returns results."""
+async def submit_request(submission: FormSubmission, background_tasks: BackgroundTasks):
+    """Submits a new AI project request as JSON, returns PENDING immediately, and executes pipeline in background."""
     form_dict = submission.model_dump()
-    saved_state = _run_pipeline(form_dict, uploaded_file_paths=[])
+    request_id = str(uuid.uuid4())
+
+    # Create initial pending state
+    initial_pending_state = {
+        "request_id": request_id,
+        "status": SubmissionStatus.PENDING.value,
+        "form_data": form_dict,
+        "department": form_dict.get("department", "corporate_support"),
+    }
+    save_submission(request_id, initial_pending_state)
+
+    # Launch pipeline in background task
+    background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, [])
 
     return SubmissionResponse(
-        request_id=saved_state["request_id"],
-        status=saved_state.get("status", "PROCESSED"),
-        decision=saved_state.get("decision"),
-        score=saved_state.get("score"),
-        report_type=saved_state.get("report_type"),
-        missing_fields=saved_state.get("missing_fields", []),
-        clarification_questions=saved_state.get("clarification_questions", []),
-        parsed_files_text=saved_state.get("parsed_files_text", []),
-        report=saved_state.get("report"),
-        created_at=saved_state.get("created_at"),
-        form_data=saved_state.get("form_data", {}),
+        request_id=request_id,
+        status=SubmissionStatus.PENDING.value,
+        form_data=form_dict,
     )
 
 
@@ -113,6 +115,7 @@ async def submit_request(submission: FormSubmission):
     summary="Submit request with uploaded PDF files (Multipart Form Data)",
 )
 async def submit_request_with_files(
+    background_tasks: BackgroundTasks,
     form_data_json: str = Form(
         ..., description="JSON string matching FormSubmission schema"
     ),
@@ -123,7 +126,7 @@ async def submit_request_with_files(
         None, description="Single PDF file upload (Choose File)"
     ),
 ):
-    """Submits form data along with uploaded files (PDF, Excel, CSV) and parses them using the graph's parse_input node."""
+    """Submits form data along with uploaded files, returns PENDING immediately, and parses in background."""
     try:
         raw_dict = json.loads(form_data_json)
         submission = FormSubmission(**raw_dict)
@@ -140,9 +143,8 @@ async def submit_request_with_files(
     if files:
         file_list.extend(files)
 
-    # Save uploaded files to disk
-    request_id_temp = str(uuid.uuid4())
-    upload_dir = os.path.join(DATA_DIR, "uploads", request_id_temp)
+    request_id = str(uuid.uuid4())
+    upload_dir = os.path.join(DATA_DIR, "uploads", request_id)
     os.makedirs(upload_dir, exist_ok=True)
 
     saved_paths = []
@@ -154,20 +156,22 @@ async def submit_request_with_files(
                 f.write(content)
             saved_paths.append(file_path)
 
-    saved_state = _run_pipeline(form_dict, uploaded_file_paths=saved_paths)
+    # Create initial pending state
+    initial_pending_state = {
+        "request_id": request_id,
+        "status": SubmissionStatus.PENDING.value,
+        "form_data": form_dict,
+        "department": form_dict.get("department", "corporate_support"),
+    }
+    save_submission(request_id, initial_pending_state)
+
+    # Launch pipeline in background task
+    background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, saved_paths)
 
     return SubmissionResponse(
-        request_id=saved_state["request_id"],
-        status=saved_state.get("status", "PROCESSED"),
-        decision=saved_state.get("decision"),
-        score=saved_state.get("score"),
-        report_type=saved_state.get("report_type"),
-        missing_fields=saved_state.get("missing_fields", []),
-        clarification_questions=saved_state.get("clarification_questions", []),
-        parsed_files_text=saved_state.get("parsed_files_text", []),
-        report=saved_state.get("report"),
-        created_at=saved_state.get("created_at"),
-        form_data=saved_state.get("form_data", {}),
+        request_id=request_id,
+        status=SubmissionStatus.PENDING.value,
+        form_data=form_dict,
     )
 
 
