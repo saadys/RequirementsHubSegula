@@ -84,6 +84,22 @@ export async function fetchSubmissionById(requestId) {
   return request(`/submissions/${requestId}`);
 }
 
+/**
+ * Polls the backend every intervalMs until status is no longer PENDING
+ */
+export async function pollSubmissionUntilComplete(requestId, intervalMs = 2000, maxAttempts = 30) {
+  let attempts = 0;
+  while (attempts < maxAttempts) {
+    const result = await fetchSubmissionById(requestId);
+    if (result && result.status !== 'PENDING') {
+      return result;
+    }
+    attempts += 1;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error('Pipeline execution timed out. Please check your submission status in the dashboard.');
+}
+
 // -------------------------------------------------------------
 // Module C: Clarification Loop
 // -------------------------------------------------------------
