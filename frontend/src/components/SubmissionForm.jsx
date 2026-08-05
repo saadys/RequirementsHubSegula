@@ -13,7 +13,7 @@ import {
   Clock,
   Sparkles
 } from 'lucide-react';
-import { fetchDepartmentFields, submitRequest, submitRequestWithUpload } from '../api/client';
+import { fetchDepartmentFields, submitRequest, submitRequestWithUpload, pollSubmissionUntilComplete } from '../api/client';
 import DepartmentSelector from './DepartmentSelector';
 
 export default function SubmissionForm({ departments, onSubmissionSuccess }) {
@@ -44,6 +44,17 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
   const [attachedFile, setAttachedFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
 
+  // Mapping of Service Area to relevant Target Users options
+  const SERVICE_AREA_TARGET_USERS = {
+    hr: ['all_employees', 'hr_team', 'managers', 'candidates', 'other'],
+    it: ['all_employees', 'it_support_team', 'developers_tech', 'managers', 'other'],
+    finance: ['all_employees', 'finance_team', 'managers', 'auditors', 'other'],
+    legal: ['all_employees', 'legal_team', 'managers', 'external_partners', 'other'],
+    facilities: ['all_employees', 'facilities_team', 'site_managers', 'other'],
+    communication: ['all_employees', 'communication_team', 'external_public', 'other'],
+    other: ['all_employees', 'department_team', 'managers', 'other'],
+  };
+
   // Fetch department-specific fields when department changes
   useEffect(() => {
     async function loadFields() {
@@ -55,7 +66,7 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
         console.warn('Using default dynamic fields fallback');
         setDynamicFields([
           { name: 'service_area', label: 'Service Area', type: 'select', options: ['hr', 'it', 'finance', 'legal', 'facilities', 'communication', 'other'], required: true },
-          { name: 'target_users', label: 'Target Users', type: 'select', options: ['employees', 'hr_team', 'it_team', 'management', 'all_staff'], required: true },
+          { name: 'target_users', label: 'Target Users', type: 'select', options: ['all_employees', 'hr_team', 'managers', 'candidates', 'other'], required: true },
           { name: 'has_existing_system', label: 'Has Existing System?', type: 'boolean', required: false },
         ]);
       } finally {
@@ -74,13 +85,25 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
   };
 
   const handleDeptSpecificChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      department_specific: {
+    setFormData((prev) => {
+      const updatedDeptSpecific = {
         ...prev.department_specific,
         [field]: value,
-      },
-    }));
+      };
+
+      // If Service Area changes, filter and auto-reset Target Users to first valid option
+      if (field === 'service_area') {
+        const allowedTargets = SERVICE_AREA_TARGET_USERS[value] || SERVICE_AREA_TARGET_USERS.other;
+        if (!allowedTargets.includes(updatedDeptSpecific.target_users)) {
+          updatedDeptSpecific.target_users = allowedTargets[0];
+        }
+      }
+
+      return {
+        ...prev,
+        department_specific: updatedDeptSpecific,
+      };
+    });
   };
 
   // Drag & drop handlers
@@ -157,6 +180,11 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
       } else {
         // Submit standard JSON payload
         result = await submitRequest(payload);
+      }
+
+      // If response status is PENDING, poll until background pipeline completes
+      if (result && result.status === 'PENDING' && result.request_id) {
+        result = await pollSubmissionUntilComplete(result.request_id);
       }
 
       onSubmissionSuccess(result);
@@ -326,6 +354,14 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
                 const val = formData.department_specific?.[field.name] ?? '';
 
                 if (field.type === 'select') {
+                  let optionsToRender = field.options || [];
+
+                  // Apply dynamic filtering for target_users based on service_area
+                  if (field.name === 'target_users') {
+                    const currentServiceArea = formData.department_specific?.service_area || 'hr';
+                    optionsToRender = SERVICE_AREA_TARGET_USERS[currentServiceArea] || SERVICE_AREA_TARGET_USERS.other;
+                  }
+
                   return (
                     <div key={field.name}>
                       <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', marginBottom: '4px' }}>
@@ -336,9 +372,9 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
                         value={val}
                         onChange={(e) => handleDeptSpecificChange(field.name, e.target.value)}
                       >
-                        {field.options?.map((opt) => (
+                        {optionsToRender.map((opt) => (
                           <option key={opt} value={opt} style={{ background: '#0F172A' }}>
-                            {opt.toUpperCase()}
+                            {opt.replace(/_/g, ' ').toUpperCase()}
                           </option>
                         ))}
                       </select>
