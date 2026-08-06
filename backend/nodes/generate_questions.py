@@ -8,8 +8,8 @@ Owner: Track A
 """
 
 from backend.contracts.state import PipelineState
+from backend.schemas import ClarificationQuestions
 from backend.services.llm import get_clarification_llm
-from backend.contracts.schemas import ClarificationQuestions
 
 
 def generate_questions(state: PipelineState) -> dict:
