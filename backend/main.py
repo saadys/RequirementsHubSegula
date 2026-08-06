@@ -18,15 +18,17 @@ logger = logging.getLogger("backend.main")
 async def startup_span(app: FastAPI):
     """Tâches exécutées au démarrage de l'application (ex: connexions DB, services)."""
     logger.info(" Démarrage de l'application AI Requirement Hub...")
-    # Emplacement futur pour l'initialisation des clients / DB :
-    # app.db_engine = ...
+    from backend.models.BaseDataModel import engine
+    app.state.db_engine = engine
+    logger.info(" DB engine (asyncpg) initialisé ✅")
 
 
 async def shutdown_span(app: FastAPI):
     """Tâches exécutées à l'arrêt de l'application (ex: fermeture des connexions)."""
     logger.info(" Arrêt de l'application AI Requirement Hub...")
-    # Emplacement futur pour le nettoyage :
-    # await app.db_engine.dispose()
+    if hasattr(app.state, "db_engine"):
+        await app.state.db_engine.dispose()
+        logger.info(" DB engine disposed ✅")
 
 
 @asynccontextmanager

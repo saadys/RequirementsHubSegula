@@ -52,3 +52,12 @@ HISTORIC_PROJECTS_PATH = os.path.join(
 DEPARTMENT_CONFIGS_PATH = os.path.join(
     os.path.dirname(__file__), "data", "department_configs.json"
 )
+
+# ── Database ─────────────────────────────────────────────────────────
+
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+if not DATABASE_URL:
+    raise ValueError(
+        "DATABASE_URL environment variable is required. "
+        "Set it in .env: postgresql+asyncpg://user:password@localhost:5435/requirementshub"
+    )
