@@ -7,7 +7,8 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from backend.config import MAX_CLARIFICATION_ROUNDS
-from .enums import Decision, SubmissionStatus
+# pyrefly: ignore [missing-import]
+from .Enums import Decision, SubmissionStatus
 
 
 # ── LLM Extraction Schema ────────────────────────────────────────────
