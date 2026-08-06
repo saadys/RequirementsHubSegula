@@ -1,0 +1,113 @@
+"""
+models/BaseDataModel.py
+Async SQLAlchemy session factory and base class for all model files.
+Inspired by mini-rag-app pattern: each XModel inherits from BaseDataModel,
+receives an injected AsyncSession, and performs its own DB operations.
+
+Usage in FastAPI routes:
+    async def get_db() -> AsyncGenerator[AsyncSession, None]:
+        async with AsyncSessionLocal() as session:
+            yield session
+
+    @router.post("/submissions/")
+    async def create(data: ..., db: AsyncSession = Depends(get_db)):
+        model = SubmissionModel(db_client=db)
+        return await model.create_submission(data)
+"""
+
+import logging
+import uuid
+from typing import Any
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    AsyncEngine,
+    create_async_engine,
+    async_sessionmaker,
+)
+from backend.config import DATABASE_URL
+
+logger = logging.getLogger("backend.models")
+
+
+def to_uuid(val: str | uuid.UUID | Any) -> uuid.UUID | None:
+    """
+    Safely convert a string or UUID object into a uuid.UUID instance.
+    Returns None if invalid or None.
+    """
+    if val is None:
+        return None
+    if isinstance(val, uuid.UUID):
+        return val
+    try:
+        return uuid.UUID(str(val))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+# ── Engine (singleton) ───────────────────────────────────────────────────────
+# pool_pre_ping=True: validates connection before use (handles DB restarts)
+# echo=False: disable SQL logging in production (set True for debug)
+engine: AsyncEngine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+)
+
+# ── Session factory ──────────────────────────────────────────────────────────
+# expire_on_commit=False: prevents "DetachedInstanceError" when accessing
+# attributes after commit in async context
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+
+# ── FastAPI dependency ───────────────────────────────────────────────────────
+async def get_db():
+    """
+    FastAPI dependency that yields an AsyncSession per request.
+    Session is automatically closed after the request completes.
+    Use with: db: AsyncSession = Depends(get_db)
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+
+
+# ── Base Model Class ─────────────────────────────────────────────────────────
+class BaseDataModel:
+    """
+    Base class for all model files (SubmissionModel, DepartmentModel, etc.).
+    Receives an injected AsyncSession and exposes common async CRUD primitives.
+
+    Design choice: Session injection (not class-level session) ensures
+    that each request gets its own isolated transaction, preventing
+    cross-request data contamination in async environments.
+    """
+
+    def __init__(self, db_client: AsyncSession):
+        self.db_client = db_client
+
+    async def save(self, instance) -> None:
+        """Add and commit a single ORM instance."""
+        self.db_client.add(instance)
+        await self.db_client.commit()
+        await self.db_client.refresh(instance)
+
+    async def save_and_return(self, instance):
+        """Add, commit, and return the refreshed ORM instance."""
+        self.db_client.add(instance)
+        await self.db_client.commit()
+        await self.db_client.refresh(instance)
+        return instance
+
+    async def delete(self, instance) -> None:
+        """Delete an ORM instance and commit."""
+        await self.db_client.delete(instance)
+        await self.db_client.commit()
