@@ -8,6 +8,7 @@ Owner: Track A
 """
 
 from backend.contracts.state import PipelineState
+from backend.schemas import FactExtraction
 from backend.services.llm import get_structured_llm
 from backend import config
 from backend.prompts.corporate_support import get_prompt as get_corporate_support_prompt
@@ -40,7 +41,6 @@ def llm_analyze(state: PipelineState) -> dict:
     clarification_questions = state.get("clarification_questions", [])
 
     # Select prompt builder based on department (defaulting to corporate_support)
-    # Future departments can be dynamically routed here
     prompt_builder = get_corporate_support_prompt
 
     # Build messages for LLM invocation
@@ -52,9 +52,12 @@ def llm_analyze(state: PipelineState) -> dict:
         clarification_questions=clarification_questions,
     )
 
-    # Invoke LLM with structured output schema (FactExtraction)
+    # Invoke LLM provider with structured output schema (FactExtraction)
     llm = get_structured_llm()
-    result = llm.invoke(messages)
+    result: FactExtraction = llm.generate_structured_output(
+        prompt=messages,
+        response_schema=FactExtraction,
+    )
 
     return {
         "extracted_facts": result.model_dump()

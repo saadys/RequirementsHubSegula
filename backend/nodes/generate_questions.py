@@ -65,7 +65,10 @@ def generate_questions(state: PipelineState) -> dict:
     
     # 3. Call structured LLM for clarification questions
     llm = get_clarification_llm()
-    result: ClarificationQuestions = llm.invoke(messages)
+    result: ClarificationQuestions = llm.generate_structured_output(
+        prompt=messages,
+        response_schema=ClarificationQuestions,
+    )
     
     return {
         "clarification_questions": result.questions,
