@@ -11,6 +11,7 @@ from backend.LLM.LLMInterfaces import LLMInterface
 from backend.LLM.providers.GeminiProvider import GeminiProvider
 from backend.LLM.providers.openai_provider import OpenAIProvider
 from backend.LLM.providers.fallback_provider import FallbackLLMProvider
+from backend.LLM.providers.LocalLLM import LocalLLMProvider
 
 
 class LLMProviderFactory:
@@ -24,6 +25,15 @@ class LLMProviderFactory:
     ) -> LLMInterface:
         """Instantiates provider with optional fallback based on configuration."""
 
+        # Explicit Local (Ollama) Provider requested
+        if provider_type == LLMProviderEnum.LOCAL:
+            model = model_name or config.LOCAL_MODEL
+            return LocalLLMProvider(
+                model_name=model,
+                temperature=temperature,
+                api_base=config.OLLAMA_BASE_URL,
+            )
+
         # Explicit OpenAI Provider requested
         if provider_type == LLMProviderEnum.OPENAI:
             model = model_name or config.FALLBACK_MODEL
@@ -34,7 +44,27 @@ class LLMProviderFactory:
             model = model_name or config.PRIMARY_MODEL
             return GeminiProvider(model_name=model, temperature=temperature)
 
-        # Default Factory behavior: Gemini Primary + OpenAI Fallback (if OpenAI key present)
+        # ── Default Factory Behavior ──────────────────────────────────────────
+        # USE_LOCAL_LLM=true  → Ollama primary  + Gemini cloud fallback (if key)
+        # USE_LOCAL_LLM=false → Gemini primary  + OpenAI fallback (if key)  [unchanged]
+
+        if config.USE_LOCAL_LLM:
+            primary_provider = LocalLLMProvider(
+                model_name=model_name or config.LOCAL_MODEL,
+                temperature=temperature,
+                api_base=config.OLLAMA_BASE_URL,
+            )
+            fallback_provider = None
+            if config.GEMINI_API_KEY_1:
+                fallback_provider = GeminiProvider(
+                    model_name=config.PRIMARY_MODEL, temperature=temperature
+                )
+            return FallbackLLMProvider(
+                primary_provider=primary_provider,
+                fallback_provider=fallback_provider,
+            )
+
+        # Cloud default: Gemini primary + OpenAI fallback
         primary_model = model_name or config.PRIMARY_MODEL
         primary_provider = GeminiProvider(model_name=primary_model, temperature=temperature)
 

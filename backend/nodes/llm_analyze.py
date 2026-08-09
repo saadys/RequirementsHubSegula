@@ -11,7 +11,7 @@ from backend.contracts.state import PipelineState
 from backend.schemas import FactExtraction
 from backend.services.llm import get_structured_llm
 from backend import config
-from backend.prompts.corporate_support import get_prompt as get_corporate_support_prompt
+from backend.LLM.templates.corporate_support import get_prompt as get_corporate_support_prompt
 
 
 def llm_analyze(state: PipelineState) -> dict:

@@ -1,11 +1,10 @@
 """
-Base Prompt Components (Re-exported from LLM Templates)
+Base Prompt Components (Facade)
 
-Shared system prompt structure used across all department prompts.
-Delegates to backend.LLM.templates.template.
+Delegates to backend.prompts.__init__ for backward compatibility.
 """
 
-from backend.LLM.templates.template import (
+from backend.prompts import (
     SYSTEM_ROLE,
     EXTRACTION_RULES,
     CLARIFICATION_CONTEXT,

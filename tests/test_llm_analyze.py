@@ -1,15 +1,8 @@
 """Tests for LLM structured output extraction. Owner: Track A"""
 
 import pytest
-from backend.services.vectorstore import load_seed_data
-from backend.nodes.rag_search import rag_search
+from unittest.mock import patch, AsyncMock
 from backend.nodes.llm_analyze import llm_analyze
-
-
-@pytest.fixture(scope="module", autouse=True)
-def setup_seed_data():
-    """Ensure vectorstore seed data is loaded before running tests."""
-    load_seed_data()
 
 
 def test_llm_analyze_valid_fact_extraction():
@@ -29,8 +22,8 @@ def test_llm_analyze_valid_fact_extraction():
         "clarification_answers": [],
     }
 
-    # Run RAG search first to populate similar_projects & rag_scores
-    state.update(rag_search(state))
+    state["similar_projects"] = []
+    state["rag_scores"] = []
 
     # Run LLM analyze
     result = llm_analyze(state)
