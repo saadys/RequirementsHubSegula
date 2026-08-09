@@ -1,48 +1,132 @@
-"""Tests for RAG retrieval accuracy. Owner: Track A"""
+"""Tests for RAG retrieval service with pgvector backend. Owner: Track A"""
 
 import pytest
-from backend.services.vectorstore import load_seed_data, search_similar
-from backend.nodes.rag_search import rag_search
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
-@pytest.fixture(scope="module", autouse=True)
-def setup_seed_data():
-    """Ensure vectorstore seed data is loaded into ChromaDB before running RAG tests."""
-    load_seed_data()
+# ── Unit tests: search_similar (mocked DB + embedding) ───────────────────────
+
+@pytest.mark.asyncio
+async def test_search_similar_returns_results():
+    """Verifies search_similar returns correct tuple structure from mock DB."""
+    from backend.services.vectorstore import search_similar
+
+    mock_row = MagicMock()
+    mock_row.id = "irfane-001"
+    mock_row.project_name = "IRFANE Chatbot"
+    mock_row.problem_description = "HR knowledge accessibility challenges"
+    mock_row.solution_description = "AI RAG-powered assistant"
+    mock_row.tags = ["chatbot", "hr"]
+    mock_row.raw_json = {"id": "irfane-001", "project_name": "IRFANE Chatbot"}
+    mock_row.similarity = 0.87
+
+    mock_result = MagicMock()
+    mock_result.fetchall.return_value = [mock_row]
+
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = mock_result
+
+    with patch("backend.services.vectorstore.generate_embedding", return_value=[0.1] * 768):
+        results = await search_similar("chatbot for onboarding", top_k=2, db=mock_db)
+
+    assert len(results) == 1
+    doc, score, meta = results[0]
+    assert score == pytest.approx(0.87)
+    assert meta["project_name"] == "IRFANE Chatbot"
+    assert "Problem:" in doc
 
 
-def test_rag_cv_screening_matches_talentium():
-    """Test that CV screening queries match Talentium as the top result."""
-    results = search_similar("We need AI to screen CVs and score candidates", top_k=2)
-    assert len(results) > 0
-    top_doc, top_score, top_meta = results[0]
-    assert "Talentium" in top_meta.get("project_name", "")
+@pytest.mark.asyncio
+async def test_search_similar_empty_results():
+    """Verifies search_similar handles empty DB results gracefully."""
+    from backend.services.vectorstore import search_similar
+
+    mock_result = MagicMock()
+    mock_result.fetchall.return_value = []
+
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = mock_result
+
+    with patch("backend.services.vectorstore.generate_embedding", return_value=[0.0] * 768):
+        results = await search_similar("completely unrelated query", top_k=2, db=mock_db)
+
+    assert results == []
 
 
-def test_rag_onboarding_chatbot_matches_irfane():
-    """Test that chatbot for onboarding queries match IRFANE as the top result."""
-    results = search_similar("chatbot for new employee onboarding and HR search", top_k=2)
-    assert len(results) > 0
-    top_doc, top_score, top_meta = results[0]
-    assert "IRFANE" in top_meta.get("project_name", "")
+# ── Unit tests: rag_search node (mocked vectorstore) ─────────────────────────
+
+@pytest.mark.asyncio
+async def test_rag_node_finds_similar_project():
+    """Verifies rag_search node correctly maps high-score results above similarity threshold."""
+    from backend.nodes.rag_search import rag_search
+
+    mock_meta = {"id": "irfane-001", "project_name": "IRFANE Chatbot"}
+    mock_db = AsyncMock()
+
+    # Score 0.70 → above RAG_SIMILAR_THRESHOLD (0.60) but below RAG_EXACT_MATCH_THRESHOLD (0.75)
+    with patch(
+        "backend.nodes.rag_search.search_similar",
+        return_value=[("Problem: HR issues", 0.70, mock_meta)]
+    ):
+        state = {
+            "form_data": {
+                "problem_description": "chatbot for new employee onboarding and HR search"
+            },
+            "parsed_files_text": [],
+        }
+        result = await rag_search(state, db=mock_db)
+
+    assert "similar_projects" in result
+    assert len(result["similar_projects"]) == 1
+    assert result["similar_projects"][0]["project_name"] == "IRFANE Chatbot"
+    assert result["is_exact_match"] is False
 
 
 
-def test_rag_node_unrelated_query_no_exact_match():
+@pytest.mark.asyncio
+async def test_rag_node_detects_exact_match():
+    """Verifies rag_search node flags exact matches (score >= RAG_EXACT_MATCH_THRESHOLD)."""
+    from backend.nodes.rag_search import rag_search
+
+    mock_meta = {"id": "talentium-001", "project_name": "Talentium"}
+    mock_db = AsyncMock()
+
+    with patch(
+        "backend.nodes.rag_search.search_similar",
+        return_value=[("Problem: CV screening", 0.96, mock_meta)]
+    ):
+        state = {
+            "form_data": {"problem_description": "We need AI to screen CVs"},
+            "parsed_files_text": [],
+        }
+        result = await rag_search(state, db=mock_db)
+
+    assert result["is_exact_match"] is True
+    assert result["exact_match_project"]["project_name"] == "Talentium"
+
+
+@pytest.mark.asyncio
+async def test_rag_node_unrelated_query_no_exact_match():
     """Test that an unrelated query yields no exact match in rag_search node."""
-    fake_state = {
-        "form_data": {
-            "project_name": "Finance Automation",
-            "department": "corporate_support",
-            "problem_description": "Automate financial quarterly reports and tax calculations.",
-            "current_process": "Excel manual entry",
-            "expected_outcome": "Automated PDF report generation",
-        },
-        "parsed_files_text": [],
-        "department": "corporate_support",
-    }
-    result = rag_search(fake_state)
+    from backend.nodes.rag_search import rag_search
+
+    mock_db = AsyncMock()
+
+    with patch(
+        "backend.nodes.rag_search.search_similar",
+        return_value=[("Problem: Finance", 0.35, {"id": "x", "project_name": "Finance Bot"})]
+    ):
+        state = {
+            "form_data": {
+                "problem_description": "Automate financial quarterly reports and tax calculations.",
+            },
+            "parsed_files_text": [],
+        }
+        result = await rag_search(state, db=mock_db)
+
     assert "similar_projects" in result
     assert "is_exact_match" in result
     assert result["is_exact_match"] is False
     assert result["exact_match_project"] is None
+    # Score 0.35 < 0.60 threshold → not in similar_projects
+    assert len(result["similar_projects"]) == 0

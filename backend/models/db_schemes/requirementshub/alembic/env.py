@@ -27,6 +27,7 @@ from backend.models.db_schemes.requirementshub.schemes import (  # noqa: F401
     ClarificationRound,
     Report,
     ReviewerOverride,
+    HistoricProject,
 )
 from backend.config import DATABASE_URL
 

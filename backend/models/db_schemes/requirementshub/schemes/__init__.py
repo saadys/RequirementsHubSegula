@@ -12,6 +12,7 @@ from .scoring_result import ScoringResult  # noqa: F401
 from .clarification_round import ClarificationRound  # noqa: F401
 from .report import Report  # noqa: F401
 from .reviewer_override import ReviewerOverride  # noqa: F401
+from .historic_project import HistoricProject  # noqa: F401
 
 __all__ = [
     "Base",
@@ -22,4 +23,5 @@ __all__ = [
     "ClarificationRound",
     "Report",
     "ReviewerOverride",
+    "HistoricProject",
 ]

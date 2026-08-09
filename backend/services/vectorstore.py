@@ -1,146 +1,201 @@
-import os
-import chromadb
-import google.generativeai as genai
-from chromadb import EmbeddingFunction, Documents, Embeddings
+"""
+backend/services/vectorstore.py
+
+Vector Store Service — pgvector implementation.
+
+Replaces the previous ChromaDB PersistentClient with a fully stateless
+async pgvector implementation backed by Cloud SQL PostgreSQL.
+
+Key design decisions:
+- Stateless: No local filesystem dependency. Compatible with Cloud Run.
+- Async: All DB operations use SQLAlchemy AsyncSession (asyncpg driver).
+- Cosine similarity: Uses pgvector <=> operator + HNSW index for fast ANN search.
+- google-genai SDK: Replaces deprecated google-generativeai package.
+"""
+
+import json
+import logging
+from typing import Any
+
+from google import genai as google_genai
+from google.genai import types as genai_types
+from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend import config
+from backend.models.db_schemes.requirementshub.schemes.historic_project import HistoricProject
 
-class GoogleGeminiEmbeddingFunction(EmbeddingFunction):
-    """Custom ChromaDB Embedding Function that calls Google's Generative AI API with key rotation and fallback."""
-    def __call__(self, input: Documents) -> Embeddings:
-        # Build list of keys to try
-        keys_to_try = []
-        if config.GEMINI_API_KEY_1:
-            keys_to_try.append(config.GEMINI_API_KEY_1)
-        if config.GEMINI_API_KEY_2:
-            keys_to_try.append(config.GEMINI_API_KEY_2)
-
-        if not keys_to_try:
-            raise ValueError("No Gemini API keys configured in environment variables.")
-
-        last_error = None
-        for key in keys_to_try:
-            try:
-                # Re-configure client with the current key
-                genai.configure(api_key=key)
-                
-                #print(f"[Embeddings] Attempting to use primary model: {config.EMBEDDING_MODEL}")
-                response = genai.embed_content(
-                    model=config.EMBEDDING_MODEL,
-                    content=input,
-                    task_type="retrieval_document"
-                )
-                #print(f"[Embeddings] Successfully embedded with model: {config.EMBEDDING_MODEL}")
-                return response["embedding"]
-            except Exception as e:
-                last_error = e
-                err_msg = str(e).lower()
-                # If the error is model not found (404), try fallback models with the current key
-                if "not found" in err_msg or "not supported" in err_msg:
-                    #print(f"[Embeddings] Primary model {config.EMBEDDING_MODEL} failed. Trying fallbacks...")
-                    for fallback in ["models/gemini-embedding-001", "models/gemini-embedding-2"]:
-                        try:
-                            #print(f"[Embeddings] Attempting fallback model: {fallback}")
-                            response = genai.embed_content(
-                                model=fallback,
-                                content=input,
-                                task_type="retrieval_document"
-                            )
-                            #print(f"[Embeddings] Successfully embedded with fallback model: {fallback}")
-                            return response["embedding"]
-                        except Exception as fe:
-                            last_error = fe
-                # If key expired or failed, proceed to next key
-                #print(f"[Embeddings] API Key failed or encountered error: {e}. Moving to next key...")
-                continue
-
-        # If all keys and fallbacks failed, raise the last exception
-        raise last_error
+logger = logging.getLogger("backend.services.vectorstore")
 
 
-# Fallback path if CHROMA_PERSIST_DIR is not yet in config.py
-persist_dir = getattr(config, "CHROMA_PERSIST_DIR", os.path.join(config.DATA_DIR, "chroma"))
+# ── Embedding Client ──────────────────────────────────────────────────────────
 
-# Initialize ChromaDB persistent client
-client = chromadb.PersistentClient(path=persist_dir)
+def _get_genai_client() -> google_genai.Client:
+    """
+    Builds a google-genai Client with key rotation.
+    Tries GEMINI_API_KEY_1 first, falls back to GEMINI_API_KEY_2.
+    On Cloud Run with Vertex AI, ADC (Application Default Credentials) are used
+    automatically if no API key is set.
+    """
+    api_key = config.GEMINI_API_KEY_1 or config.GEMINI_API_KEY_2
+    if api_key:
+        return google_genai.Client(api_key=api_key)
+    # Fallback to Application Default Credentials (Cloud Run IAM)
+    return google_genai.Client()
 
-def get_collection():
-    """Gets or creates the ChromaDB collection using Google's embedding function."""
-    embedding_function = GoogleGeminiEmbeddingFunction()
-    return client.get_or_create_collection(
-        name=config.CHROMA_COLLECTION_NAME,
-        embedding_function=embedding_function
-    )
 
-def load_seed_data():
-    """Reads historic_projects.json and adds all projects to the ChromaDB collection."""
-    import json
-    from backend.config import HISTORIC_PROJECTS_PATH
-    
-    collection = get_collection()
-    
-    with open(HISTORIC_PROJECTS_PATH, "r") as f:
-        projects = json.load(f)
-        
+async def generate_embedding(text_input: str) -> list[float]:
+    """
+    Generates a Gemini embedding vector for the given text.
+
+    Returns:
+        list[float] of length EMBEDDING_DIMENSION (768 for text-embedding-004).
+
+    Pitfall: google-genai embed_content is synchronous — we run it directly
+    as it's a lightweight HTTP call managed by the event loop thread pool.
+    """
+    keys_to_try = [k for k in [config.GEMINI_API_KEY_1, config.GEMINI_API_KEY_2] if k]
+    if not keys_to_try:
+        raise ValueError("No Gemini API keys configured. Set GEMINI_API_KEY_1 or GEMINI_API_KEY_2.")
+
+    last_error: Exception | None = None
+    for key in keys_to_try:
+        try:
+            client = google_genai.Client(api_key=key)
+            response = client.models.embed_content(
+                model=config.EMBEDDING_MODEL,
+                contents=text_input,
+                config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+            )
+            return response.embeddings[0].values
+        except Exception as exc:
+            logger.warning("Embedding key failed (%s), trying next: %s", key[:8], exc)
+            last_error = exc
+
+    raise RuntimeError(f"All Gemini API keys failed for embedding. Last error: {last_error}")
+
+
+# ── Seed Data ─────────────────────────────────────────────────────────────────
+
+async def load_seed_data(db: AsyncSession) -> None:
+    """
+    Reads historic_projects.json and upserts all projects into the
+    historic_projects PostgreSQL table with their embeddings.
+
+    Idempotent: Uses INSERT ... ON CONFLICT DO UPDATE (upsert by id).
+    Safe to call at every startup — only re-embeds if entry is missing.
+    """
+    with open(config.HISTORIC_PROJECTS_PATH, "r") as f:
+        projects: list[dict[str, Any]] = json.load(f)
+
+    inserted = 0
+    skipped = 0
+
     for project in projects:
-        # Build document string from problem + solution + tags
+        # Check if already exists (avoid re-embedding on every restart)
+        existing = await db.get(HistoricProject, project["id"])
+        if existing is not None:
+            skipped += 1
+            continue
+
         doc_string = (
             f"Problem: {project['problem_description']}\n"
             f"Solution: {project['solution_description']}\n"
             f"Tags: {', '.join(project['tags'])}"
         )
-        
-        # Flatten lists for ChromaDB metadata (convert lists to strings)
-        metadata = {
-            "id": project["id"],
-            "project_name": project["project_name"],
-            "department": project["department"],
-            "problem_description": project["problem_description"],
-            "solution_description": project["solution_description"],
-            "outcome": project["outcome"],
-            "contact_person": project["contact_person"],
-            "year": project["year"],
-            "ai_techniques": ", ".join(project["ai_techniques"]),
-            "tags": ", ".join(project["tags"]),
-            # Store the raw JSON string to reconstruct original types
-            "raw_json": json.dumps(project)
-        }
-        
-        # Add or update the document in ChromaDB
-        collection.upsert(
-            documents=[doc_string],
-            ids=[project["id"]],
-            metadatas=[metadata]
-        )
 
-def search_similar(query: str, top_k: int = 2):
-    """Searches the collection for similar documents and returns a list of (doc, score, metadata)."""
-    import json
-    collection = get_collection()
-    results = collection.query(
-        query_texts=[query],
-        n_results=top_k
+        embedding_vector = await generate_embedding(doc_string)
+
+        record = HistoricProject(
+            id=project["id"],
+            project_name=project["project_name"],
+            department=project.get("department"),
+            problem_description=project.get("problem_description"),
+            solution_description=project.get("solution_description"),
+            outcome=project.get("outcome"),
+            contact_person=project.get("contact_person"),
+            year=project.get("year"),
+            ai_techniques=project.get("ai_techniques", []),
+            tags=project.get("tags", []),
+            raw_json=project,
+            embedding=embedding_vector,
+        )
+        db.add(record)
+        inserted += 1
+
+    await db.commit()
+    logger.info(
+        "[VectorStore] Seed complete — %d inserted, %d already existed.",
+        inserted,
+        skipped,
     )
-    
+
+
+# ── Search ────────────────────────────────────────────────────────────────────
+
+async def search_similar(
+    query: str,
+    top_k: int,
+    db: AsyncSession,
+) -> list[tuple[str, float, dict]]:
+    """
+    Searches the historic_projects table for vectors closest to the query embedding.
+
+    Uses pgvector cosine distance operator (<=>).
+    Cosine similarity = 1 - cosine_distance.
+
+    Returns:
+        list of (doc_string, similarity_score, metadata_dict)
+        sorted by descending similarity (closest first).
+    """
+    query_embedding = await generate_embedding(query)
+
+    # SQLAlchemy raw SQL with pgvector <=> cosine distance operator
+    # The HNSW index on `embedding` makes this approximate (fast at scale).
+    stmt = text(
+        """
+        SELECT
+            id,
+            project_name,
+            problem_description,
+            solution_description,
+            tags,
+            raw_json,
+            1 - (embedding <=> CAST(:query_vec AS vector)) AS similarity
+        FROM historic_projects
+        ORDER BY embedding <=> CAST(:query_vec AS vector)
+        LIMIT :top_k
+        """
+    )
+
+    result = await db.execute(
+        stmt,
+        {
+            "query_vec": str(query_embedding),
+            "top_k": top_k,
+        },
+    )
+    rows = result.fetchall()
+
     output = []
-    if not results or not results["documents"] or len(results["documents"][0]) == 0:
-        return output
-        
-    documents = results["documents"][0]
-    distances = results["distances"][0] if "distances" in results and results["distances"] else [0.0] * len(documents)
-    metadatas = results["metadatas"][0] if "metadatas" in results and results["metadatas"] else [{}] * len(documents)
-    
-    for doc, dist, meta in zip(documents, distances, metadatas):
-        # Convert distance to similarity score
-        score = 1.0 - dist
-        
-        # Reconstruct the original dictionary structure if raw_json is present
-        if "raw_json" in meta:
-            try:
-                original_dict = json.loads(meta["raw_json"])
-                meta = original_dict
-            except Exception:
-                pass
-                
-        output.append((doc, score, meta))
-        
+    for row in rows:
+        doc_string = (
+            f"Problem: {row.problem_description}\n"
+            f"Solution: {row.solution_description}\n"
+            f"Tags: {row.tags}"
+        )
+        score = float(row.similarity)
+        metadata = row.raw_json if row.raw_json else {"id": row.id, "project_name": row.project_name}
+
+        output.append((doc_string, score, metadata))
+
     return output
+
+
+# ── Healthcheck helper ────────────────────────────────────────────────────────
+
+async def is_seed_data_loaded(db: AsyncSession) -> bool:
+    """Returns True if at least one project has been indexed in the DB."""
+    result = await db.execute(text("SELECT COUNT(*) FROM historic_projects"))
+    count = result.scalar()
+    return (count or 0) > 0
