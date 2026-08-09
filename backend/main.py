@@ -18,9 +18,23 @@ logger = logging.getLogger("backend.main")
 async def startup_span(app: FastAPI):
     """Tâches exécutées au démarrage de l'application (ex: connexions DB, services)."""
     logger.info(" Démarrage de l'application AI Requirement Hub...")
-    from backend.models.BaseDataModel import engine
+    from backend.models.BaseDataModel import engine, AsyncSessionLocal
     app.state.db_engine = engine
     logger.info(" DB engine (asyncpg) initialisé ✅")
+
+    # Auto-seed pgvector historic_projects table if empty (first run or new deployment)
+    from backend.services.vectorstore import load_seed_data, is_seed_data_loaded
+    try:
+        async with AsyncSessionLocal() as db:
+            if not await is_seed_data_loaded(db):
+                logger.info(" [VectorStore] Table vide — démarrage du seed RAG...")
+                async with AsyncSessionLocal() as seed_db:
+                    await load_seed_data(seed_db)
+                logger.info(" [VectorStore] Seed RAG terminé ✅")
+            else:
+                logger.info(" [VectorStore] Données RAG déjà présentes, seed ignoré ✅")
+    except Exception as exc:
+        logger.warning(" [VectorStore] Seed RAG ignoré (DB non disponible ou erreur): %s", exc)
 
 
 async def shutdown_span(app: FastAPI):
@@ -50,14 +64,26 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configuration CORS Middleware
+import os
+from backend.config import ENV, IS_CLOUD_RUN
+
+# Configuration CORS Middleware (Sécurisée pour la production)
+allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", os.getenv("FRONTEND_ORIGIN", ""))
+if allowed_origins_raw:
+    allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",") if origin.strip()]
+elif IS_CLOUD_RUN or ENV in ("production", "prod"):
+    allowed_origins = ["http://localhost:5173"]  # Origin par défaut sécurisé
+else:
+    allowed_origins = ["*"]  # Wildcard autorisé uniquement en dev local
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Inclure les routeurs
 app.include_router(api_router)
