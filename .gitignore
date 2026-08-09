@@ -1,41 +1,65 @@
-# Environment
+# Environment & Secrets
 .env
-.venv/
+.env.local
+.env.*.local
+*.env
+*.pem
+*.key
 
-# Python
+# Python Caches & Bytecode
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
 *.egg-info/
+.eggs/
+dist/
+build/
 
-# Data (generated at runtime)
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Testing, Coverage & Quality Tools
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# Runtime Data, Databases & Vector Stores
 data/*.db
 data/chroma/
 checkpoints.db
 submissions_store.json
 uploads/
+*.sqlite
+*.sqlite3
 
-# Node
+# Frontend & Node.js
 node_modules/
-dist/
+frontend/dist/
+frontend/.next/
+frontend/build/
 
-# IDE
+# IDE & Editor Configuration
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# OS
+# OS System Files
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# A_roadmap
+# Project Specific Ignored Files & Logs
 track_a_roadmap.md
-
 historic_projects/
-
-# Ignored system & test files
 zsystem/
 backend/create_tech_comparison_pdf.py
 tests/test_parse_input.py
 tests/test_validation.py
-
 *.pdf
