@@ -1,14 +1,3 @@
-"""
-backend/cli/seed.py
-
-Standalone CLI entry point for seeding the pgvector vectorstore with historic projects.
-Conforms to Twelve-Factor App Factor XII (Admin Processes) by decoupling administrative
-data seeding tasks from the HTTP web process lifecycle.
-
-Usage:
-    python -m backend.cli.seed
-"""
-
 import asyncio
 import sys
 import logging
