@@ -55,22 +55,31 @@ async def generate_embedding(text_input: str) -> list[float]:
     as it's a lightweight HTTP call managed by the event loop thread pool.
     """
     keys_to_try = [k for k in [config.GEMINI_API_KEY_1, config.GEMINI_API_KEY_2] if k]
-    if not keys_to_try:
-        raise ValueError("No Gemini API keys configured. Set GEMINI_API_KEY_1 or GEMINI_API_KEY_2.")
-
     last_error: Exception | None = None
-    for key in keys_to_try:
-        try:
-            client = google_genai.Client(api_key=key)
-            response = client.models.embed_content(
-                model=config.EMBEDDING_MODEL,
-                contents=text_input,
-                config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
-            )
-            return response.embeddings[0].values
-        except Exception as exc:
-            logger.warning("Embedding key failed (%s), trying next: %s", key[:8], exc)
-            last_error = exc
+
+    if keys_to_try:
+        for key in keys_to_try:
+            try:
+                client = google_genai.Client(api_key=key)
+                response = client.models.embed_content(
+                    model=config.EMBEDDING_MODEL,
+                    contents=text_input,
+                    config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+                )
+                return response.embeddings[0].values
+            except Exception as exc:
+                logger.warning("Embedding key failed (%s), trying next: %s", key[:8], exc)
+                last_error = exc
+    else:
+        last_error = ValueError("No Gemini API keys configured.")
+
+    if config.USE_LOCAL_LLM or config.ENV == "development":
+        logger.warning("[VectorStore] Gemini Embedding API unavailable (%s). Using deterministic local 768-dim vector.", last_error)
+        import hashlib
+        import random
+        seed = int(hashlib.sha256(text_input.encode("utf-8")).hexdigest()[:8], 16)
+        rng = random.Random(seed)
+        return [rng.uniform(-0.1, 0.1) for _ in range(config.EMBEDDING_DIMENSION)]
 
     raise RuntimeError(f"All Gemini API keys failed for embedding. Last error: {last_error}")
 

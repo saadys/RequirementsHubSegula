@@ -105,7 +105,7 @@ async def _execute_pipeline_in_background(
         }
 
         graph = get_compiled_graph()
-        result_state = graph.invoke(initial_state)
+        result_state = await graph.ainvoke(initial_state)
 
         status_str = _determine_status(result_state)
 

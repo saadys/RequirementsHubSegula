@@ -9,7 +9,6 @@ Owner: TOGETHER (Phase 3 — Integration)
 from langgraph.graph import StateGraph, END, START
 
 from backend.contracts.state import PipelineState
-from backend.services.vectorstore import load_seed_data
 
 # ── Node imports ─────────────────────────────────────────────────
 from backend.nodes.parse_input import parse_input
@@ -31,10 +30,6 @@ from backend.graph.routing import (
 
 def build_graph() -> StateGraph:
     """Constructs the full AI Requirement Hub pipeline as a LangGraph StateGraph."""
-
-    # Ensure ChromaDB seed data is loaded before the graph runs
-    load_seed_data()
-
     graph = StateGraph(PipelineState)
 
     # ── Add all nodes ────────────────────────────────────────────

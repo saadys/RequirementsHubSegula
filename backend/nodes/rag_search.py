@@ -11,6 +11,8 @@ import logging
 import time
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from typing import Optional
+from backend.models.BaseDataModel import AsyncSessionLocal
 from backend.contracts.state import PipelineState
 from backend.services.vectorstore import search_similar
 from backend import config
@@ -18,13 +20,10 @@ from backend import config
 logger = logging.getLogger("backend.nodes.rag_search")
 
 
-async def rag_search(state: PipelineState, db: AsyncSession) -> dict:
+async def rag_search(state: PipelineState, db: Optional[AsyncSession] = None) -> dict:
     """
     Async node that queries the pgvector table for historic projects
     similar to the submitted request.
-
-    Design: Receives an injected AsyncSession (from FastAPI Depends chain)
-    to remain stateless and testable. No global DB state.
     """
     form_data = state.get("form_data", {})
     problem_desc = form_data.get("problem_description", "")
@@ -38,8 +37,11 @@ async def rag_search(state: PipelineState, db: AsyncSession) -> dict:
     query = " ".join(query_parts).strip()
 
     start_time = time.perf_counter()
-    # Query pgvector for top-K similar projects via cosine similarity
-    results = await search_similar(query, top_k=config.RAG_TOP_K, db=db)
+    if db is None:
+        async with AsyncSessionLocal() as session:
+            results = await search_similar(query, top_k=config.RAG_TOP_K, db=session)
+    else:
+        results = await search_similar(query, top_k=config.RAG_TOP_K, db=db)
     duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
     similar_projects = []
