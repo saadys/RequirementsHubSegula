@@ -1,11 +1,56 @@
+# ==============================================================================
+# RequirementsHubSegula — Docker Ignore Configuration
+# Context: Project Root
+# ==============================================================================
+
+# 1. Environment & Secrets
 .env
+.env.*
+*.env
+*.pem
+*.key
+
+# 2. Version Control & Workspace Metadata
+.git/
+.gitignore
+.agents/
+
+# 3. Python Virtual Environments & Build Caches
 .venv/
+venv/
+env/
 __pycache__/
-*.pyc
-node_modules/
+*.py[cod]
+*$py.class
+*.egg-info/
 dist/
+build/
+
+# 4. Testing, Coverage & Quality Tools
+tests/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# 5. Frontend (Excluded from Backend Container Image)
+frontend/
+**/node_modules/
+
+# 6. Local Runtime Data, Databases & Uploads
 data/*.db
 data/chroma/
-.git/
+data/uploads/
+submissions_store.json
+checkpoints.db
+*.sqlite
+*.sqlite3
+
+# 7. Documentation, System Scripts & PDF Assets
 *.md
+docs_internship/
 old_ai_projects_docs/
+zsystem/
+*.pdf
