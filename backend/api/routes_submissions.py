@@ -2,30 +2,76 @@
 Submissions API Routes
 
 Handles submitting new AI project requests, running the LangGraph pipeline,
-retrieving submission state, and listing submissions.
+retrieving submission state, and listing submissions via PostgreSQL / SQLAlchemy.
 """
 
 import json
+import logging
 import os
 import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from backend.config import DATA_DIR
 from backend.graph.builder import get_compiled_graph
+from backend.models.BaseDataModel import AsyncSessionLocal, get_db
+from backend.models.ClarificationModel import ClarificationModel
+from backend.models.ReportModel import ReportModel
+from backend.models.ScoringModel import ScoringModel
+from backend.models.SubmissionModel import SubmissionModel
+from backend.models.db_schemes.requirementshub.schemes.submission import Submission
 from backend.schemas import Decision, FormSubmission, SubmissionResponse, SubmissionStatus
-from backend.services.storage import (
-    get_submission,
-    list_submissions,
-    save_submission,
-)
-
-import logging
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile, status
 
 logger = logging.getLogger(__name__)
 
-
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
+
+
+def entity_to_submission_response(sub: Submission) -> SubmissionResponse:
+    """Converts a Submission ORM instance and its loaded relations into a SubmissionResponse Pydantic model."""
+    scoring = sub.scoring_result
+    fact = sub.fact_extraction
+    rep = sub.report
+    clar_rounds = sub.clarification_rounds or []
+    overrides = sub.reviewer_overrides or []
+
+    latest_questions = clar_rounds[-1].questions if clar_rounds else []
+    decision = overrides[0].new_decision if overrides else (scoring.decision if scoring else None)
+
+    form_data = {
+        "project_name": sub.project_name,
+        "department": sub.department_id,
+        "team_contact_name": sub.team_contact_name,
+        "team_contact_email": sub.team_contact_email,
+        "problem_description": sub.problem_description,
+        "current_process": sub.current_process,
+        "expected_outcome": sub.expected_outcome,
+        "data_description": sub.data_description,
+        "deadline_urgency": sub.deadline_urgency,
+        "department_specific": sub.department_specific or {},
+    }
+
+    created_at_str = (
+        sub.created_at.isoformat()
+        if sub.created_at and hasattr(sub.created_at, "isoformat")
+        else (str(sub.created_at) if sub.created_at else None)
+    )
+
+    return SubmissionResponse(
+        request_id=str(sub.id),
+        status=sub.status,
+        decision=decision,
+        score=scoring.score if scoring else None,
+        report_type=rep.report_type if rep else None,
+        missing_fields=fact.extracted_requirements if (fact and fact.extracted_requirements) else [],
+        clarification_questions=latest_questions or [],
+        parsed_files_text=[],
+        report=rep.content if rep else None,
+        created_at=created_at_str,
+        form_data=form_data,
+    )
 
 
 def _determine_status(result_state: Dict[str, Any]) -> str:
@@ -44,9 +90,7 @@ def _determine_status(result_state: Dict[str, Any]) -> str:
     return SubmissionStatus.PROCESSED.value
 
 
-
-
-def _execute_pipeline_in_background(
+async def _execute_pipeline_in_background(
     request_id: str, form_dict: Dict[str, Any], uploaded_file_paths: List[str]
 ):
     """Executes the compiled LangGraph pipeline asynchronously in a background task."""
@@ -64,18 +108,50 @@ def _execute_pipeline_in_background(
         result_state = graph.invoke(initial_state)
 
         status_str = _determine_status(result_state)
-        result_state["status"] = status_str
-        result_state["request_id"] = request_id
 
-        # Persist updated state with final results
-        save_submission(request_id, result_state)
+        async with AsyncSessionLocal() as db:
+            sub_model = SubmissionModel(db)
+            scoring_model = ScoringModel(db)
+            report_model = ReportModel(db)
+            clar_model = ClarificationModel(db)
+
+            await sub_model.update_status(request_id, status_str)
+
+            if result_state.get("score") is not None or result_state.get("decision"):
+                await scoring_model.create_or_update(
+                    request_id,
+                    {
+                        "score": result_state.get("score"),
+                        "percentage": result_state.get("score"),
+                        "decision": result_state.get("decision"),
+                        "breakdown": result_state.get("score_breakdown") or {},
+                    },
+                )
+
+            if result_state.get("report"):
+                await report_model.create_or_update(
+                    request_id,
+                    report_type=result_state.get("report_type", "FULL_CAHIER_DES_CHARGES"),
+                    content=result_state.get("report"),
+                )
+
+            if result_state.get("clarification_questions"):
+                await clar_model.create_round(
+                    submission_id=request_id,
+                    round_number=result_state.get("clarification_round", 1),
+                    questions=result_state.get("clarification_questions", []),
+                    answers=result_state.get("clarification_answers", []),
+                )
+
         logger.info(f"Background task finished for request {request_id}. Status: {status_str}")
     except Exception as e:
         logger.error(f"Error in background pipeline execution for request {request_id}: {e}")
-        error_state = get_submission(request_id) or {"request_id": request_id, "form_data": form_dict}
-        error_state["status"] = "FAILED"
-        error_state["error"] = str(e)
-        save_submission(request_id, error_state)
+        try:
+            async with AsyncSessionLocal() as db:
+                sub_model = SubmissionModel(db)
+                await sub_model.update_status(request_id, "FAILED")
+        except Exception as db_err:
+            logger.error(f"Failed to update status to FAILED in DB for {request_id}: {db_err}")
 
 
 @router.post(
@@ -84,28 +160,38 @@ def _execute_pipeline_in_background(
     status_code=status.HTTP_201_CREATED,
     summary="Submit a new AI project request (JSON)",
 )
-async def submit_request(submission: FormSubmission, background_tasks: BackgroundTasks):
+async def submit_request(
+    submission: FormSubmission,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
     """Submits a new AI project request as JSON, returns PENDING immediately, and executes pipeline in background."""
     form_dict = submission.model_dump()
-    request_id = str(uuid.uuid4())
+    req_uuid = uuid.uuid4()
+    request_id = str(req_uuid)
 
-    # Create initial pending state
-    initial_pending_state = {
-        "request_id": request_id,
-        "status": SubmissionStatus.PENDING.value,
-        "form_data": form_dict,
-        "department": form_dict.get("department", "corporate_support"),
-    }
-    save_submission(request_id, initial_pending_state)
+    sub_model = SubmissionModel(db)
+    sub_entity = Submission(
+        id=req_uuid,
+        project_name=submission.project_name,
+        department_id=submission.department or "corporate_support",
+        team_contact_name=submission.team_contact_name,
+        team_contact_email=submission.team_contact_email,
+        problem_description=submission.problem_description,
+        current_process=submission.current_process,
+        expected_outcome=submission.expected_outcome,
+        data_description=submission.data_description,
+        deadline_urgency=submission.deadline_urgency or "low",
+        department_specific=submission.department_specific or {},
+        status=SubmissionStatus.PENDING.value,
+    )
+    await sub_model.create_submission(sub_entity)
 
     # Launch pipeline in background task
     background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, [])
 
-    return SubmissionResponse(
-        request_id=request_id,
-        status=SubmissionStatus.PENDING.value,
-        form_data=form_dict,
-    )
+    sub = await sub_model.get_by_id_with_relations(req_uuid)
+    return entity_to_submission_response(sub or sub_entity)
 
 
 @router.post(
@@ -125,6 +211,7 @@ async def submit_request_with_files(
     file: UploadFile = File(
         None, description="Single PDF file upload (Choose File)"
     ),
+    db: AsyncSession = Depends(get_db),
 ):
     """Submits form data along with uploaded files, returns PENDING immediately, and parses in background."""
     try:
@@ -143,7 +230,8 @@ async def submit_request_with_files(
     if files:
         file_list.extend(files)
 
-    request_id = str(uuid.uuid4())
+    req_uuid = uuid.uuid4()
+    request_id = str(req_uuid)
     upload_dir = os.path.join(DATA_DIR, "uploads", request_id)
     os.makedirs(upload_dir, exist_ok=True)
 
@@ -156,23 +244,28 @@ async def submit_request_with_files(
                 f.write(content)
             saved_paths.append(file_path)
 
-    # Create initial pending state
-    initial_pending_state = {
-        "request_id": request_id,
-        "status": SubmissionStatus.PENDING.value,
-        "form_data": form_dict,
-        "department": form_dict.get("department", "corporate_support"),
-    }
-    save_submission(request_id, initial_pending_state)
+    sub_model = SubmissionModel(db)
+    sub_entity = Submission(
+        id=req_uuid,
+        project_name=submission.project_name,
+        department_id=submission.department or "corporate_support",
+        team_contact_name=submission.team_contact_name,
+        team_contact_email=submission.team_contact_email,
+        problem_description=submission.problem_description,
+        current_process=submission.current_process,
+        expected_outcome=submission.expected_outcome,
+        data_description=submission.data_description,
+        deadline_urgency=submission.deadline_urgency or "low",
+        department_specific=submission.department_specific or {},
+        status=SubmissionStatus.PENDING.value,
+    )
+    await sub_model.create_submission(sub_entity)
 
     # Launch pipeline in background task
     background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, saved_paths)
 
-    return SubmissionResponse(
-        request_id=request_id,
-        status=SubmissionStatus.PENDING.value,
-        form_data=form_dict,
-    )
+    sub = await sub_model.get_by_id_with_relations(req_uuid)
+    return entity_to_submission_response(sub or sub_entity)
 
 
 @router.get(
@@ -181,27 +274,17 @@ async def submit_request_with_files(
     summary="List all submissions with optional filters",
 )
 async def get_all_submissions(
-    department: Optional[str] = None, status: Optional[str] = None
+    department: Optional[str] = None,
+    status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
 ):
     """Lists all submissions. Filter by department or status (e.g. GO, NEEDS_CLARIFICATION, REJECTED, FAST_TRACK)."""
-    items = list_submissions(department=department, status=status)
-    responses = []
-    for item in items:
-        responses.append(
-            SubmissionResponse(
-                request_id=item["request_id"],
-                status=item.get("status", "PROCESSED"),
-                decision=item.get("decision"),
-                score=item.get("score"),
-                report_type=item.get("report_type"),
-                missing_fields=item.get("missing_fields", []),
-                clarification_questions=item.get("clarification_questions", []),
-                parsed_files_text=item.get("parsed_files_text", []),
-                report=item.get("report"),
-                created_at=item.get("created_at"),
-                form_data=item.get("form_data", {}),
-            )
-        )
+    sub_model = SubmissionModel(db)
+    items = await sub_model.get_all_with_relations(status_filter=status)
+    if department:
+        items = [s for s in items if s.department_id == department]
+
+    responses = [entity_to_submission_response(item) for item in items]
     return responses
 
 
@@ -210,25 +293,14 @@ async def get_all_submissions(
     response_model=SubmissionResponse,
     summary="Get submission details by request_id",
 )
-async def get_submission_by_id(request_id: str):
+async def get_submission_by_id(request_id: str, db: AsyncSession = Depends(get_db)):
     """Retrieves full details and status of a submission by request_id."""
-    sub = get_submission(request_id)
+    sub_model = SubmissionModel(db)
+    sub = await sub_model.get_by_id_with_relations(request_id)
     if not sub:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Submission '{request_id}' not found",
         )
 
-    return SubmissionResponse(
-        request_id=sub["request_id"],
-        status=sub.get("status", "PROCESSED"),
-        decision=sub.get("decision"),
-        score=sub.get("score"),
-        report_type=sub.get("report_type"),
-        missing_fields=sub.get("missing_fields", []),
-        clarification_questions=sub.get("clarification_questions", []),
-        parsed_files_text=sub.get("parsed_files_text", []),
-        report=sub.get("report"),
-        created_at=sub.get("created_at"),
-        form_data=sub.get("form_data", {}),
-    )
+    return entity_to_submission_response(sub)

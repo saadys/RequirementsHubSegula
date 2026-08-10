@@ -1,6 +1,18 @@
-from typing import List, Optional
-from fastapi import APIRouter, HTTPException, status
+"""
+AI Team Dashboard API Routes
 
+Provides endpoints for listing pending submissions and performing manual decision overrides
+by AI Engineers using PostgreSQL / SQLAlchemy.
+"""
+
+from datetime import datetime
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.models.BaseDataModel import get_db
+from backend.models.ReviewerModel import ReviewerModel
+from backend.models.SubmissionModel import SubmissionModel
 from backend.schemas import (
     Decision,
     DecisionOverrideInput,
@@ -8,7 +20,6 @@ from backend.schemas import (
     PendingSubmissionItem,
     SubmissionStatus,
 )
-from backend.services.storage import get_submission, list_submissions, save_submission
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -18,16 +29,25 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
     response_model=List[PendingSubmissionItem],
     summary="List all requests for AI Engineering review",
 )
-async def list_pending_requests(status_filter: Optional[str] = None):
+async def list_pending_requests(
+    status_filter: Optional[str] = None, db: AsyncSession = Depends(get_db)
+):
     """Retrieves submissions for AI engineering review (optionally filtered by status)."""
-    all_subs = list_submissions()
+    sub_model = SubmissionModel(db)
+    all_subs = await sub_model.get_all_with_relations()
     pending_items = []
 
     for sub in all_subs:
-        dec = sub.get("decision")
-        stat = sub.get("status", SubmissionStatus.PROCESSED.value)
+        scoring = sub.scoring_result
+        overrides = sub.reviewer_overrides or []
+        dec = overrides[0].new_decision if overrides else (scoring.decision if scoring else None)
+        stat = sub.status or SubmissionStatus.PROCESSED.value
+        fact = sub.fact_extraction
+        rep = sub.report
+        rounds = sub.clarification_rounds or []
+        clar_round = rounds[-1].round_number if rounds else 0
+        missing_fields = fact.extracted_requirements if (fact and fact.extracted_requirements) else []
 
-        # Determine matching based on status filter
         if status_filter and status_filter.upper() != "ALL":
             sf = status_filter.upper()
             if sf == Decision.GO.value:
@@ -40,29 +60,34 @@ async def list_pending_requests(status_filter: Optional[str] = None):
                     or dec == Decision.NEEDS_CLARIFICATION.value
                 )
             elif sf == SubmissionStatus.INCOMPLETE.value:
-                matches = stat == SubmissionStatus.INCOMPLETE.value or bool(sub.get("missing_fields"))
+                matches = stat == SubmissionStatus.INCOMPLETE.value or bool(missing_fields)
             else:
                 matches = stat == sf or dec == sf
             if not matches:
                 continue
 
-        form_data = sub.get("form_data", {}) or {}
-        has_rep = bool(sub.get("report"))
+        has_rep = bool(rep and rep.content and rep.content.strip())
+        created_at_str = (
+            sub.created_at.isoformat()
+            if sub.created_at and hasattr(sub.created_at, "isoformat")
+            else (str(sub.created_at) if sub.created_at else None)
+        )
+
         pending_items.append(
             PendingSubmissionItem(
-                request_id=sub["request_id"],
-                project_name=form_data.get("project_name") or "Untitled Project",
-                department=sub.get("department") or form_data.get("department") or "corporate_support",
-                team_contact_name=form_data.get("team_contact_name") or "N/A",
-                team_contact_email=form_data.get("team_contact_email") or "N/A",
+                request_id=str(sub.id),
+                project_name=sub.project_name or "Untitled Project",
+                department=sub.department_id or "corporate_support",
+                team_contact_name=sub.team_contact_name or "N/A",
+                team_contact_email=sub.team_contact_email or "N/A",
                 status=stat,
                 decision=dec,
-                score=sub.get("score"),
-                clarification_round=sub.get("clarification_round", 0),
-                created_at=sub.get("created_at"),
-                missing_fields=sub.get("missing_fields", []),
+                score=scoring.score if scoring else None,
+                clarification_round=clar_round,
+                created_at=created_at_str,
+                missing_fields=missing_fields,
                 has_report=has_rep,
-                report_type=sub.get("report_type"),
+                report_type=rep.report_type if rep else None,
             )
         )
 
@@ -75,37 +100,46 @@ async def list_pending_requests(status_filter: Optional[str] = None):
     summary="Manual decision override by AI Engineer",
 )
 async def override_submission_decision(
-    request_id: str, payload: DecisionOverrideInput
+    request_id: str, payload: DecisionOverrideInput, db: AsyncSession = Depends(get_db)
 ):
     """Allows an AI engineer to manually override or finalize the decision (e.g. approve a NO_GO or partial request)."""
-    state = get_submission(request_id)
-    if not state:
+    sub_model = SubmissionModel(db)
+    sub = await sub_model.get_by_id_with_relations(request_id)
+    if not sub:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Submission '{request_id}' not found",
         )
 
-    state["decision"] = payload.decision
+    overrides = sub.reviewer_overrides or []
+    prev_decision = overrides[0].new_decision if overrides else (sub.scoring_result.decision if sub.scoring_result else sub.status)
+
+    new_status = sub.status
     if payload.decision == Decision.GO.value:
-        state["status"] = SubmissionStatus.COMPLETED.value
+        new_status = SubmissionStatus.COMPLETED.value
     elif payload.decision == Decision.NO_GO.value:
-        state["status"] = SubmissionStatus.REJECTED.value
+        new_status = SubmissionStatus.REJECTED.value
     elif payload.decision == Decision.NEEDS_CLARIFICATION.value:
-        state["status"] = SubmissionStatus.NEEDS_CLARIFICATION.value
+        new_status = SubmissionStatus.NEEDS_CLARIFICATION.value
 
-    state["reviewer_notes"] = payload.reviewer_notes
-    state["reviewer_name"] = payload.reviewer_name
-    state["manual_override"] = True
+    rev_model = ReviewerModel(db)
+    await rev_model.create_override(
+        submission_id=request_id,
+        previous_decision=prev_decision,
+        new_decision=payload.decision,
+        reviewer_name=payload.reviewer_name or "AI Engineer",
+        reviewer_notes=payload.reviewer_notes,
+    )
 
-    saved_state = save_submission(request_id, state)
+    await sub_model.update_status(request_id, new_status)
 
     return DecisionOverrideResponse(
-        request_id=request_id,
-        decision=saved_state["decision"],
-        status=saved_state["status"],
-        score=saved_state.get("score"),
-        reviewer_notes=saved_state.get("reviewer_notes"),
-        reviewer_name=saved_state.get("reviewer_name"),
+        request_id=str(sub.id),
+        decision=payload.decision,
+        status=new_status,
+        score=sub.scoring_result.score if sub.scoring_result else None,
+        reviewer_notes=payload.reviewer_notes,
+        reviewer_name=payload.reviewer_name,
         manual_override=True,
-        updated_at=saved_state.get("updated_at"),
+        updated_at=datetime.now().isoformat(),
     )

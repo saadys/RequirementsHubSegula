@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .BaseDataModel import BaseDataModel, to_uuid
@@ -44,6 +45,26 @@ class SubmissionModel(BaseDataModel):
 
     get_submission_by_id = get_by_id
 
+    async def get_by_id_with_relations(self, submission_id: str | uuid.UUID) -> Submission | None:
+        """Fetch a single submission by UUID with eager-loaded relationships."""
+        uid = to_uuid(submission_id)
+        if not uid:
+            logger.warning("Invalid UUID format: %s", submission_id)
+            return None
+
+        result = await self.db_client.execute(
+            select(Submission)
+            .options(
+                selectinload(Submission.scoring_result),
+                selectinload(Submission.fact_extraction),
+                selectinload(Submission.clarification_rounds),
+                selectinload(Submission.report),
+                selectinload(Submission.reviewer_overrides),
+            )
+            .where(Submission.id == uid)
+        )
+        return result.scalar_one_or_none()
+
     async def get_all(
         self,
         status_filter: str | None = None,
@@ -58,9 +79,33 @@ class SubmissionModel(BaseDataModel):
         result = await self.db_client.execute(query)
         return list(result.scalars().all())
 
+    async def get_all_with_relations(
+        self,
+        status_filter: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[Submission]:
+        """List submissions with eager-loaded relationships."""
+        query = (
+            select(Submission)
+            .options(
+                selectinload(Submission.scoring_result),
+                selectinload(Submission.fact_extraction),
+                selectinload(Submission.clarification_rounds),
+                selectinload(Submission.report),
+                selectinload(Submission.reviewer_overrides),
+            )
+            .order_by(Submission.created_at.desc())
+        )
+        if status_filter:
+            query = query.where(Submission.status == status_filter)
+        query = query.limit(limit).offset(offset)
+        result = await self.db_client.execute(query)
+        return list(result.scalars().all())
+
     async def list_submissions(self, status_filter: str | None = None) -> list[Submission]:
         """Alias for get_all."""
-        return await self.get_all(status_filter=status_filter)
+        return await self.get_all_with_relations(status_filter=status_filter)
 
     async def delete_submission(self, submission_id: str | uuid.UUID) -> bool:
         """Delete a submission by ID."""
