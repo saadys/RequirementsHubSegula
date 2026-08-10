@@ -24,7 +24,13 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
 )
-from backend.config import DATABASE_URL
+from backend.config import (
+    DATABASE_URL,
+    DB_POOL_SIZE,
+    DB_MAX_OVERFLOW,
+    DB_POOL_TIMEOUT,
+    DB_POOL_RECYCLE,
+)
 
 logger = logging.getLogger("backend.models")
 
@@ -46,13 +52,16 @@ def to_uuid(val: str | uuid.UUID | Any) -> uuid.UUID | None:
 
 # ── Engine (singleton) ───────────────────────────────────────────────────────
 # pool_pre_ping=True: validates connection before use (handles DB restarts)
-# echo=False: disable SQL logging in production (set True for debug)
+# pool_recycle: re-establishes stale connections before DB drops them (e.g. Cloud SQL limits)
+# pool_size & max_overflow: managed via ENV variables to handle Cloud Run auto-scaling
 engine: AsyncEngine = create_async_engine(
     DATABASE_URL,
     echo=False,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=DB_POOL_SIZE,
+    max_overflow=DB_MAX_OVERFLOW,
+    pool_timeout=DB_POOL_TIMEOUT,
+    pool_recycle=DB_POOL_RECYCLE,
 )
 
 # ── Session factory ──────────────────────────────────────────────────────────

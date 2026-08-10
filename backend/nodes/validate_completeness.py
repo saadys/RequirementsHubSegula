@@ -33,14 +33,14 @@ def load_department_configs(config_path: Path | None = None) -> dict[str, Any]:
     """
     target_path = config_path or CONFIG_FILE_PATH
     if not target_path.exists():
-        logger.error(f"Department configuration file not found at: {target_path}")
+        logger.error("Department configuration file not found at: %s", target_path)
         return {}
 
     try:
         with open(target_path, "r", encoding="utf-8") as file:
             return json.load(file)
     except Exception as exc:
-        logger.error(f"Error reading department configs at {target_path}: {exc}")
+        logger.error("Error reading department configs at %s: %s", target_path, exc)
         return {}
 
 
@@ -118,8 +118,10 @@ def validate_completeness(state: PipelineState) -> dict[str, Any]:
     missing_fields, is_complete = validate_submission_fields(form_data, department)
 
     logger.info(
-        f"Validation completed for department '{department}'. "
-        f"Complete: {is_complete}, Missing fields count: {len(missing_fields)}"
+        "Validation completed for department '%s' | complete=%s missing_fields_count=%d",
+        department,
+        is_complete,
+        len(missing_fields),
     )
 
     return {

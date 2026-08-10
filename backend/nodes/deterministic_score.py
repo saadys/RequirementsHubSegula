@@ -118,7 +118,7 @@ def deterministic_score(state: PipelineState) -> dict[str, Any]:
 
     result = calculate_feasibility_score(facts, rag_scores)
 
-    logger.info(f"Deterministic scoring finished. Score: {result['score']}, Decision: {result['decision']}")
+    logger.info("Deterministic scoring completed | score=%d decision=%s", result["score"], result["decision"])
 
     return {
         "score": result["score"],

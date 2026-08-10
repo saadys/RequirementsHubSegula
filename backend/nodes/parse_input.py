@@ -29,11 +29,11 @@ def parse_pdf(file_path: str) -> str:
     """
     path = Path(file_path)
     if not path.is_file():
-        logger.error(f"PDF file not found at path: {file_path}")
+        logger.error("PDF file not found at path: %s", file_path)
         raise FileNotFoundError(f"File not found: {file_path}")
         
     if path.suffix.lower() != ".pdf":
-        logger.error(f"Invalid file extension for PDF parser: {file_path}")
+        logger.error("Invalid file extension for PDF parser: %s", file_path)
         raise ValueError(f"Expected a .pdf file, got: {path.suffix}")
 
     extracted_pages: list[str] = []
@@ -45,13 +45,13 @@ def parse_pdf(file_path: str) -> str:
                 if page_text and page_text.strip():
                     extracted_pages.append(f"--- Page {index} ---\n{page_text.strip()}")
                 else:
-                    logger.warning(f"Page {index} in '{path.name}' contained no extractable text (possibly scanned or empty).")
+                    logger.warning("Page %d in '%s' contained no extractable text (scanned or empty)", index, path.name)
     except Exception as exc:
-        logger.error(f"Failed to parse PDF file '{file_path}': {str(exc)}", exc_info=True)
+        logger.error("Failed to parse PDF file '%s': %s", file_path, exc, exc_info=True)
         return f"[ERROR] Failed to parse PDF '{path.name}': {str(exc)}"
 
     if not extracted_pages:
-        logger.warning(f"PDF file '{file_path}' yielded zero extractable text.")
+        logger.warning("PDF file '%s' yielded zero extractable text", file_path)
         return f"[WARNING] File '{path.name}' contains no extractable text (image-based scanned PDF)."
 
     return "\n\n".join(extracted_pages)
@@ -80,6 +80,6 @@ def parse_input(state: PipelineState) -> dict:
             parsed_text = parse_pdf(file_path)
             parsed_results.append(parsed_text)
         else:
-            logger.info(f"Skipping non-PDF file in parse_input: {file_path}")
+            logger.info("Skipping non-PDF file in parse_input: %s", file_path)
 
     return {"parsed_files_text": parsed_results}

@@ -8,6 +8,7 @@ Owner: Track A
 """
 
 import logging
+import time
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.contracts.state import PipelineState
@@ -36,8 +37,10 @@ async def rag_search(state: PipelineState, db: AsyncSession) -> dict:
 
     query = " ".join(query_parts).strip()
 
+    start_time = time.perf_counter()
     # Query pgvector for top-K similar projects via cosine similarity
     results = await search_similar(query, top_k=config.RAG_TOP_K, db=db)
+    duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
     similar_projects = []
     rag_scores = []
@@ -61,10 +64,15 @@ async def rag_search(state: PipelineState, db: AsyncSession) -> dict:
             is_exact_match = True
             exact_match_project = meta
 
+    top_score = rag_scores[0] if rag_scores else 0.0
+
     logger.info(
-        "[RAG] Query returned %d results. %d above threshold (%.2f). Exact match: %s",
+        "RAG search completed | duration_ms=%.2f query_part_count=%d total_results=%d matches_above_threshold=%d top_similarity_score=%.4f threshold=%.2f exact_match=%s",
+        duration_ms,
+        len(query_parts),
         len(results),
         len(similar_projects),
+        top_score,
         similarity_threshold,
         is_exact_match,
     )
