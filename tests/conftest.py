@@ -53,18 +53,28 @@ async def test_engine():
 
 
 @pytest_asyncio.fixture(scope="function")
-async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
+async def db_session(test_engine, monkeypatch) -> AsyncGenerator[AsyncSession, None]:
     """Yield an isolated async session per test."""
     session_factory = async_sessionmaker(
         bind=test_engine, class_=AsyncSession, expire_on_commit=False
     )
+    import sys
+    base_module = sys.modules["backend.models.BaseDataModel"]
+    monkeypatch.setattr(base_module, "AsyncSessionLocal", session_factory)
     async with session_factory() as session:
         yield session
 
 
 @pytest_asyncio.fixture(scope="function")
-async def async_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def async_client(db_session: AsyncSession, test_engine, monkeypatch) -> AsyncGenerator[AsyncClient, None]:
     """FastAPI AsyncClient fixture overriding get_db dependency."""
+    session_factory = async_sessionmaker(
+        bind=test_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    import sys
+    base_module = sys.modules["backend.models.BaseDataModel"]
+    monkeypatch.setattr(base_module, "AsyncSessionLocal", session_factory)
+
     async def override_get_db():
         yield db_session
 

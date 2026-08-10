@@ -2,13 +2,13 @@
 Tests for Core Submissions API Endpoints (Module B)
 """
 
-from fastapi.testclient import TestClient
-from backend.main import app
+import json
+import pytest
+from httpx import AsyncClient
 
-client = TestClient(app)
 
-
-def test_create_submission_success():
+@pytest.mark.asyncio
+async def test_create_submission_success(async_client: AsyncClient, seeded_department):
     """Test POST /api/submissions/ with valid corporate_support request (Asynchronous Background Tasks)."""
     payload = {
         "project_name": "AI Onboarding Assistant",
@@ -27,24 +27,24 @@ def test_create_submission_success():
         },
     }
 
-    response = client.post("/api/submissions/", json=payload)
+    response = await async_client.post("/api/submissions/", json=payload)
     assert response.status_code == 201
     data = response.json()
 
     assert "request_id" in data
     assert data["request_id"] is not None
-    # Immediate response status is PENDING when using background tasks
     assert data["status"] == "PENDING"
     assert data["form_data"]["project_name"] == "AI Onboarding Assistant"
 
     # Test GET /api/submissions/{request_id} endpoint
-    get_response = client.get(f"/api/submissions/{data['request_id']}")
+    get_response = await async_client.get(f"/api/submissions/{data['request_id']}")
     assert get_response.status_code == 200
     get_data = get_response.json()
     assert get_data["request_id"] == data["request_id"]
 
 
-def test_get_submission_by_id_and_list():
+@pytest.mark.asyncio
+async def test_get_submission_by_id_and_list(async_client: AsyncClient, seeded_department):
     """Test GET /api/submissions/{id} and GET /api/submissions/ listing."""
     payload = {
         "project_name": "Test Retrieval Project",
@@ -62,20 +62,20 @@ def test_get_submission_by_id_and_list():
         },
     }
 
-    create_res = client.post("/api/submissions/", json=payload)
+    create_res = await async_client.post("/api/submissions/", json=payload)
     assert create_res.status_code == 201
     created_data = create_res.json()
     req_id = created_data["request_id"]
 
     # Test GET by ID
-    get_res = client.get(f"/api/submissions/{req_id}")
+    get_res = await async_client.get(f"/api/submissions/{req_id}")
     assert get_res.status_code == 200
     get_data = get_res.json()
     assert get_data["request_id"] == req_id
     assert get_data["form_data"]["project_name"] == "Test Retrieval Project"
 
     # Test List Submissions
-    list_res = client.get("/api/submissions/?department=corporate_support")
+    list_res = await async_client.get("/api/submissions/?department=corporate_support")
     assert list_res.status_code == 200
     list_data = list_res.json()
     assert isinstance(list_data, list)
@@ -83,17 +83,17 @@ def test_get_submission_by_id_and_list():
     assert len(matching) == 1
 
 
-def test_get_submission_not_found():
+@pytest.mark.asyncio
+async def test_get_submission_not_found(async_client: AsyncClient):
     """Test GET /api/submissions/non_existent_id returns 404."""
-    response = client.get("/api/submissions/non_existent_request_id_12345")
+    response = await async_client.get("/api/submissions/00000000-0000-0000-0000-000000000000")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
 
 
-def test_create_submission_with_pdf_upload(tmp_path):
+@pytest.mark.asyncio
+async def test_create_submission_with_pdf_upload(async_client: AsyncClient, seeded_department, tmp_path):
     """Test POST /api/submissions/upload with multipart form data and PDF attachment."""
-    import json
-
     payload_dict = {
         "project_name": "PDF Processing Project",
         "department": "corporate_support",
@@ -117,10 +117,9 @@ def test_create_submission_with_pdf_upload(tmp_path):
     with open(pdf_file, "rb") as f:
         files = {"file": ("sample_spec.pdf", f, "application/pdf")}
         data = {"form_data_json": json.dumps(payload_dict)}
-        response = client.post("/api/submissions/upload", data=data, files=files)
+        response = await async_client.post("/api/submissions/upload", data=data, files=files)
 
     assert response.status_code == 201
     res_data = response.json()
     assert "request_id" in res_data
     assert res_data["status"] == "PENDING"
-
