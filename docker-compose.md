@@ -22,9 +22,6 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    volumes:
-      - app-data:/app/data
-      - ./backend:/app/backend    # Hot reload during dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,5 +37,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  app-data:
   pgdata:
+
