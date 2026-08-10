@@ -1,11 +1,3 @@
-"""
-Application Configuration
-
-Centralized settings for the AI Requirement Hub.
-
-  SHARED FILE — Do not edit without agreement from both engineers.
-"""
-
 import os
 from dotenv import load_dotenv
 
@@ -16,61 +8,75 @@ IS_CLOUD_RUN = bool(os.getenv("K_SERVICE"))
 if not IS_CLOUD_RUN and ENV not in ("production", "prod"):
     load_dotenv()
 
+# ========================= Logging Config =========================
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+DEFAULT_LOG_FORMAT = "json" if (IS_CLOUD_RUN or ENV in ("production", "prod")) else "text"
+LOG_FORMAT = os.getenv("LOG_FORMAT", DEFAULT_LOG_FORMAT).lower()
 
 
-# ── API Keys ─────────────────────────────────────────────────────
+
+# ========================= API Keys =========================
 
 GEMINI_API_KEY_1 = os.getenv("GEMINI_API_KEY_1", "")
 GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# ── LLM Settings ─────────────────────────────────────────────────
 
-LLM_TEMPERATURE = 0  # Deterministic output for fact extraction
-LLM_TEMPERATURE_CLARIFICATION = 0.3  # Slight variation for natural questions
-PRIMARY_MODEL = "gemini/gemini-3.1-flash-lite"
-FALLBACK_MODEL = "openai/gpt-4o"
+# ========================= LLM Config =========================
 
-# ── Local LLM (Ollama) Settings ──────────────────────────────────
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0"))  # Deterministic output for fact extraction
+LLM_TEMPERATURE_CLARIFICATION = float(os.getenv("LLM_TEMPERATURE_CLARIFICATION", "0.3"))  # Slight variation for natural questions
+PRIMARY_MODEL = os.getenv("PRIMARY_MODEL", "gemini/gemini-3.1-flash-lite")
+FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "openai/gpt-4o")
 
-# Set USE_LOCAL_LLM=true in .env to route all inference through Ollama
+
 USE_LOCAL_LLM = os.getenv("USE_LOCAL_LLM", "false").lower() == "true"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 LOCAL_MODEL = os.getenv("LOCAL_MODEL", "ollama/qwen2.5:7b-instruct")
 
-# ── Scoring Thresholds ───────────────────────────────────────────
+# ========================= Scoring Thresholds =========================
 
-SCORE_GO_THRESHOLD = 70        
-SCORE_NOGO_THRESHOLD = 20        
+SCORE_GO_THRESHOLD = int(os.getenv("SCORE_GO_THRESHOLD", "70"))
+SCORE_NOGO_THRESHOLD = int(os.getenv("SCORE_NOGO_THRESHOLD", "20"))
 # Between 40-69 = NEEDS_CLARIFICATION
 
-# ── Clarification Settings ───────────────────────────────────────
+# ========================= Clarification Settings =========================
 
-MAX_CLARIFICATION_ROUNDS = 2
+MAX_CLARIFICATION_ROUNDS = int(os.getenv("MAX_CLARIFICATION_ROUNDS", "2"))
 
-# ── RAG Settings ─────────────────────────────────────────────────
+# ========================= Vector DB Config =========================
 
-RAG_EXACT_MATCH_THRESHOLD = 0.75
-RAG_SIMILAR_THRESHOLD = 0.60
-RAG_TOP_K = 5
-EMBEDDING_MODEL = "models/text-embedding-004"
-EMBEDDING_DIMENSION = 768  # Output dimension of text-embedding-004
+RAG_EXACT_MATCH_THRESHOLD = float(os.getenv("RAG_EXACT_MATCH_THRESHOLD", "0.75"))
+RAG_SIMILAR_THRESHOLD = float(os.getenv("RAG_SIMILAR_THRESHOLD", "0.60"))
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-004")
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "768"))  # Output dimension of text-embedding-004
 
-# ── Paths ────────────────────────────────────────────────────────
+# ========================= Path Config =========================
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-HISTORIC_PROJECTS_PATH = os.path.join(
-    os.path.dirname(__file__), "data", "historic_projects.json"
+DATA_DIR = os.getenv(
+    "DATA_DIR",
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 )
-DEPARTMENT_CONFIGS_PATH = os.path.join(
-    os.path.dirname(__file__), "data", "department_configs.json"
+HISTORIC_PROJECTS_PATH = os.getenv(
+    "HISTORIC_PROJECTS_PATH",
+    os.path.join(os.path.dirname(__file__), "data", "historic_projects.json")
+)
+DEPARTMENT_CONFIGS_PATH = os.getenv(
+    "DEPARTMENT_CONFIGS_PATH",
+    os.path.join(os.path.dirname(__file__), "data", "department_configs.json")
 )
 
-# ── Database ─────────────────────────────────────────────────────────
+# ========================= DataBase Config =========================
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-# Support Cloud SQL Unix Socket via INSTANCE_CONNECTION_NAME if DATABASE_URL is not set directly
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "1800"))
+
 INSTANCE_CONNECTION_NAME = os.getenv("INSTANCE_CONNECTION_NAME", "")
 if not DATABASE_URL and INSTANCE_CONNECTION_NAME:
     db_user = os.getenv("DB_USER", "postgres")
@@ -86,9 +92,9 @@ if not DATABASE_URL:
         "or for Cloud SQL: postgresql+asyncpg://user:pass@/dbname?host=/cloudsql/PROJECT:REGION:INSTANCE"
     )
 
-# Sanitize/Ensure asyncpg dialect prefix for SQLAlchemy
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+asyncpg://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 

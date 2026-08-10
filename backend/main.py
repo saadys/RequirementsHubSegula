@@ -10,39 +10,27 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api import api_router
+from backend.core.GCPJsonFormatter import setup_logging
 
-logging.basicConfig(level=logging.INFO)
+# Initialiser le système de logging structuré (Twelve-Factor Factor XI) avant FastAPI()
+setup_logging()
 logger = logging.getLogger("backend.main")
 
 
 async def startup_span(app: FastAPI):
     """Tâches exécutées au démarrage de l'application (ex: connexions DB, services)."""
-    logger.info(" Démarrage de l'application AI Requirement Hub...")
-    from backend.models.BaseDataModel import engine, AsyncSessionLocal
+    logger.info("Application AI Requirement Hub starting...")
+    from backend.models.BaseDataModel import engine
     app.state.db_engine = engine
-    logger.info(" DB engine (asyncpg) initialisé ✅")
-
-    # Auto-seed pgvector historic_projects table if empty (first run or new deployment)
-    from backend.services.vectorstore import load_seed_data, is_seed_data_loaded
-    try:
-        async with AsyncSessionLocal() as db:
-            if not await is_seed_data_loaded(db):
-                logger.info(" [VectorStore] Table vide — démarrage du seed RAG...")
-                async with AsyncSessionLocal() as seed_db:
-                    await load_seed_data(seed_db)
-                logger.info(" [VectorStore] Seed RAG terminé ✅")
-            else:
-                logger.info(" [VectorStore] Données RAG déjà présentes, seed ignoré ✅")
-    except Exception as exc:
-        logger.warning(" [VectorStore] Seed RAG ignoré (DB non disponible ou erreur): %s", exc)
+    logger.info("Asyncpg DB engine initialized")
 
 
 async def shutdown_span(app: FastAPI):
     """Tâches exécutées à l'arrêt de l'application (ex: fermeture des connexions)."""
-    logger.info(" Arrêt de l'application AI Requirement Hub...")
+    logger.info("Application AI Requirement Hub shutting down...")
     if hasattr(app.state, "db_engine"):
         await app.state.db_engine.dispose()
-        logger.info(" DB engine disposed ✅")
+        logger.info("Asyncpg DB engine disposed")
 
 
 @asynccontextmanager
