@@ -4,6 +4,7 @@ Gemini LLM Provider
 Concrete provider for Google Gemini models with multi-key round robin and Pydantic structured output.
 """
 
+import time
 from typing import Dict, List, Optional, Type
 from pydantic import BaseModel
 import litellm
@@ -32,7 +33,7 @@ class GeminiProvider(BaseLLMProvider):
             try:
                 return func(api_key=key, **kwargs)
             except Exception as e:
-                self.logger.warning(f"Gemini API key failed: {e}. Trying next key...")
+                self.logger.warning("Gemini API key failed (%s). Trying next key...", e)
                 last_exception = e
         if last_exception:
             raise last_exception
@@ -49,12 +50,27 @@ class GeminiProvider(BaseLLMProvider):
         temp = temperature if temperature is not None else self.default_temperature
 
         def _call(api_key: str):
+            start_time = time.perf_counter()
             response = litellm.completion(
                 model=self.model_name,
                 messages=messages,
                 temperature=temp,
                 max_tokens=max_output_tokens,
                 api_key=api_key,
+            )
+            duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+            completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+            total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+            self.logger.info(
+                "Gemini LLM text call completed | model=%s duration_ms=%.2f prompt_tokens=%d completion_tokens=%d total_tokens=%d",
+                self.model_name,
+                duration_ms,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
             )
             return response.choices[0].message.content
 
@@ -71,6 +87,7 @@ class GeminiProvider(BaseLLMProvider):
         temp = temperature if temperature is not None else self.default_temperature
 
         def _call(api_key: str):
+            start_time = time.perf_counter()
             response = litellm.completion(
                 model=self.model_name,
                 messages=messages,
@@ -78,8 +95,22 @@ class GeminiProvider(BaseLLMProvider):
                 response_format=response_schema,
                 api_key=api_key,
             )
+            duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+            completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+            total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+            self.logger.info(
+                "Gemini LLM structured call completed | model=%s schema=%s duration_ms=%.2f prompt_tokens=%d completion_tokens=%d total_tokens=%d",
+                self.model_name,
+                response_schema.__name__,
+                duration_ms,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+            )
             content = response.choices[0].message.content
-            # Parse json into pydantic model
             return response_schema.model_validate_json(content)
 
         return self._execute_with_keys(_call)

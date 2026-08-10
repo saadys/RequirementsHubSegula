@@ -6,6 +6,7 @@ Concrete provider for local LLM models (e.g. qwen2.5:7b-instruct) via Ollama and
 
 import json
 import re
+import time
 import urllib.request
 from typing import Dict, List, Optional, Type
 import litellm
@@ -39,12 +40,27 @@ class LocalLLMProvider(BaseLLMProvider):
         messages = self._format_messages(prompt=prompt, system_prompt=system_prompt)
         temp = temperature if temperature is not None else self.default_temperature
 
+        start_time = time.perf_counter()
         response = litellm.completion(
             model=self.model_name,
             messages=messages,
             temperature=temp,
             max_tokens=max_output_tokens,
             api_base=self.api_base,
+        )
+        duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+        completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+        total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+        self.logger.info(
+            "Local LLM text call completed | model=%s duration_ms=%.2f prompt_tokens=%d completion_tokens=%d total_tokens=%d",
+            self.model_name,
+            duration_ms,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
         )
         return response.choices[0].message.content
 
@@ -77,12 +93,28 @@ class LocalLLMProvider(BaseLLMProvider):
         else:
             messages.append({"role": "user", "content": json_instruction})
 
+        start_time = time.perf_counter()
         response = litellm.completion(
             model=self.model_name,
             messages=messages,
             temperature=temp,
             api_base=self.api_base,
             response_format={"type": "json_object"},
+        )
+        duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+        completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+        total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
+
+        self.logger.info(
+            "Local LLM structured call completed | model=%s schema=%s duration_ms=%.2f prompt_tokens=%d completion_tokens=%d total_tokens=%d",
+            self.model_name,
+            response_schema.__name__,
+            duration_ms,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
         )
 
         raw_content = response.choices[0].message.content
@@ -96,5 +128,5 @@ class LocalLLMProvider(BaseLLMProvider):
             with urllib.request.urlopen(req, timeout=3) as resp:
                 return resp.status == 200
         except Exception as e:
-            self.logger.warning(f"LocalLLM health check failed for {self.api_base}: {e}")
+            self.logger.warning("LocalLLM health check failed for %s: %s", self.api_base, e)
             return False

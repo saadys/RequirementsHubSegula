@@ -36,7 +36,7 @@ class FallbackLLMProvider(LLMInterface):
             )
         except Exception as e:
             if self.fallback:
-                self.logger.warning(f"Primary LLM Provider failed ({e}). Falling back to secondary provider...")
+                self.logger.warning("Primary LLM Provider failed (%s). Falling back to secondary provider", e)
                 return self.fallback.generate_text(
                     prompt=prompt,
                     system_prompt=system_prompt,
@@ -62,7 +62,7 @@ class FallbackLLMProvider(LLMInterface):
             )
         except Exception as e:
             if self.fallback:
-                self.logger.warning(f"Primary LLM Provider failed ({e}). Falling back to secondary provider...")
+                self.logger.warning("Primary LLM Provider failed (%s). Falling back to secondary provider", e)
                 return self.fallback.generate_structured_output(
                     prompt=prompt,
                     response_schema=response_schema,
