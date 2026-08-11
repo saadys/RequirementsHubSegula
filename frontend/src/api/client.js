@@ -39,7 +39,7 @@ async function request(endpoint, options = {}) {
 // Health Check
 // -------------------------------------------------------------
 export async function fetchHealth() {
-  const res = await fetch(`${ROOT_URL}/health`);
+  const res = await fetch(`${BASE_URL}/health`);
   return res.json();
 }
 
