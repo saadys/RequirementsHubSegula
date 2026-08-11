@@ -60,15 +60,19 @@ async def generate_embedding(text_input: str) -> list[float]:
     if keys_to_try:
         for key in keys_to_try:
             try:
+                model_name = config.EMBEDDING_MODEL.removeprefix("models/").removeprefix("gemini/")
                 client = google_genai.Client(api_key=key)
                 response = client.models.embed_content(
-                    model=config.EMBEDDING_MODEL,
+                    model=model_name,
                     contents=text_input,
-                    config=genai_types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+                    config=genai_types.EmbedContentConfig(
+                        task_type="RETRIEVAL_DOCUMENT",
+                        output_dimensionality=config.EMBEDDING_DIMENSION,
+                    ),
                 )
                 return response.embeddings[0].values
             except Exception as exc:
-                logger.warning("Embedding key failed (%s), trying next: %s", key[:8], exc)
+                logger.warning("Embedding key failed (%s) with model %s, trying next: %s", key[:8], model_name, exc)
                 last_error = exc
     else:
         last_error = ValueError("No Gemini API keys configured.")

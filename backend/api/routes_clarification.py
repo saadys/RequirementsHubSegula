@@ -133,7 +133,7 @@ async def submit_clarification_answers(
     }
 
     graph = get_compiled_graph()
-    updated_state = graph.invoke(state)
+    updated_state = await graph.ainvoke(state)
 
     status_str = _determine_status(updated_state)
     await sub_model.update_status(request_id, status_str)
@@ -157,6 +157,16 @@ async def submit_clarification_answers(
             report_type=updated_state.get("report_type", "FULL_CAHIER_DES_CHARGES"),
             content=updated_state.get("report"),
         )
+
+    if updated_state.get("clarification_questions") and status_str == SubmissionStatus.NEEDS_CLARIFICATION.value:
+        next_round_num = curr_round_num + 1
+        if next_round_num <= MAX_CLARIFICATION_ROUNDS:
+            await clar_model.create_round(
+                submission_id=request_id,
+                round_number=next_round_num,
+                questions=updated_state.get("clarification_questions", []),
+                answers=[],
+            )
 
     refreshed_sub = await sub_model.get_by_id_with_relations(request_id)
     ref_rounds = refreshed_sub.clarification_rounds or []
