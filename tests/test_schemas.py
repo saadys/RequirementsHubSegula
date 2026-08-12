@@ -175,3 +175,73 @@ def test_clarification_schemas():
     )
     assert clarif_resp.clarification_round == 1
     assert clarif_resp.max_rounds == 2
+
+
+def test_5_pillar_categorical_fact_extraction():
+    """Test 5-pillar CategoricalFactExtraction and individual pillar schemas."""
+    from backend.schemas import (
+        CategoricalFactExtraction,
+        PillarAIViability,
+        PillarDataReadiness,
+        PillarGovernance,
+        PillarIntegration,
+        PillarProblemClarity,
+    )
+
+    data = {
+        "project_summary": "Automating invoice OCR and ERP line-item reconciliation.",
+        "identified_technique": "OCR + Fuzzy Matching",
+        "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "Standard NLP/OCR automation task."},
+        "data_readiness": {"category": "READY", "reason": "1,200 clean PDF invoices monthly."},
+        "problem_clarity": {"category": "CLEAR", "reason": "Clear inputs, outputs, and measurable KPIs."},
+        "integration_feasibility": {"category": "MODERATE", "reason": "Integrates with SAP ERP via standard table read."},
+        "governance_and_safety": {"category": "SAFE", "reason": "Internal accounting data with standard privacy controls."},
+    }
+
+    extraction = CategoricalFactExtraction(**data)
+    assert extraction.ai_viability.category == "HIGHLY_VIABLE"
+    assert extraction.data_readiness.category == "READY"
+    assert extraction.problem_clarity.category == "CLEAR"
+    assert extraction.integration_feasibility.category == "MODERATE"
+    assert extraction.governance_and_safety.category == "SAFE"
+    assert extraction.identified_technique == "OCR + Fuzzy Matching"
+
+    # Test invalid category throws validation error
+    invalid_data = data.copy()
+    invalid_data["ai_viability"] = {"category": "INVALID_CATEGORY", "reason": "Foo"}
+    with pytest.raises(ValidationError):
+        CategoricalFactExtraction(**invalid_data)
+
+
+def test_clarification_questions_model():
+    """Test ClarificationQuestionsModel and QuestionItem schemas."""
+    from backend.schemas import ClarificationQuestionsModel, QuestionItem
+
+    item = QuestionItem(
+        question="What is the expected daily invoice volume?",
+        target_pillar="data_readiness",
+        technical_reasoning="Needed to evaluate throughput requirements.",
+    )
+    assert item.target_pillar == "data_readiness"
+
+    model = ClarificationQuestionsModel(questions=[item])
+    assert len(model.questions) == 1
+    assert model.questions[0].question == "What is the expected daily invoice volume?"
+
+
+def test_pipeline_state_new_fields():
+    """Test PipelineState contains sub_scores, veto_reasons, and veto_triggered fields."""
+    from backend.contracts.state import PipelineState
+
+    state: PipelineState = {
+        "request_id": "test-req-123",
+        "score": 85,
+        "sub_scores": {"ai_viability": 30, "data_readiness": 25},
+        "veto_triggered": False,
+        "veto_reasons": [],
+        "decision": "GO",
+    }
+    assert state["sub_scores"]["ai_viability"] == 30
+    assert state["veto_triggered"] is False
+    assert state["veto_reasons"] == []
+

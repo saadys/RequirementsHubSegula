@@ -11,7 +11,91 @@ from backend.config import MAX_CLARIFICATION_ROUNDS
 from .Enums import Decision, SubmissionStatus
 
 
-# ── LLM Extraction Schema ────────────────────────────────────────────
+# ── 5-Pillar Categorical Extraction Schemas ───────────────────────────
+
+class PillarAIViability(BaseModel):
+    category: Literal["HIGHLY_VIABLE", "MARGINAL", "NOT_AI", "IMPOSSIBLE"] = Field(
+        ...,
+        description=(
+            "HIGHLY_VIABLE: Clear ML/NLP/CV automation.\n"
+            "MARGINAL: Commodity task where standard commercial API or existing software is better.\n"
+            "NOT_AI: Solvable with Python script, SQL query, cron job, or hardware cooling/replacement.\n"
+            "IMPOSSIBLE: Defies physics, math, or causality (e.g. 100% lottery prediction, sentient AGI)."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences technical justification.")
+
+
+class PillarDataReadiness(BaseModel):
+    category: Literal["READY", "UNLABELED_OR_MESSY", "NONE"] = Field(
+        ...,
+        description=(
+            "READY: Structured, labeled, accessible data (SQL, clean PDFs, annotated images).\n"
+            "UNLABELED_OR_MESSY: Raw data exists in bulk but lacks annotations/labels.\n"
+            "NONE: No data exists yet or it is scattered on personal laptops without access."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences data readiness assessment.")
+
+
+class PillarProblemClarity(BaseModel):
+    category: Literal["CLEAR", "PARTIAL", "CONTRADICTORY", "VAGUE"] = Field(
+        ...,
+        description=(
+            "CLEAR: Concrete workflow, defined inputs/outputs, and measurable KPIs.\n"
+            "PARTIAL: Clear intent but missing volume, format, or success threshold.\n"
+            "CONTRADICTORY: Contains mutually exclusive requirements (e.g. 100% autonomous with 100% human approval).\n"
+            "VAGUE: Pure buzzwords with no concrete business process."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences problem clarity assessment.")
+
+
+class PillarIntegration(BaseModel):
+    category: Literal["SIMPLE", "MODERATE", "COMPLEX"] = Field(
+        ...,
+        description=(
+            "SIMPLE: Standalone UI, batch file export, or clean REST API.\n"
+            "MODERATE: Standard enterprise systems (SharePoint, Jira, modern ERP).\n"
+            "COMPLEX: Legacy SAP write permissions, real-time robotics, or hard infra dependencies."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences integration assessment.")
+
+
+class PillarGovernance(BaseModel):
+    category: Literal["SAFE", "MODERATE_RISK", "CRITICAL_RISK"] = Field(
+        ...,
+        description=(
+            "SAFE: Standard internal business data with no compliance/privacy issues.\n"
+            "MODERATE_RISK: Needs privacy review, GDPR consent, or human oversight.\n"
+            "CRITICAL_RISK: Phishing tool, credential harvesting, unauthorized employee surveillance, illegal intent."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences governance and compliance assessment.")
+
+
+class CategoricalFactExtraction(BaseModel):
+    project_summary: str = Field(..., description="2-3 sentences concise technical summary of the submission.")
+    identified_technique: str = Field(..., description="Recommended technical approach (e.g., 'OCR + Fuzzy Matching', 'RAG', 'Standard Python ETL Script').")
+    ai_viability: PillarAIViability
+    data_readiness: PillarDataReadiness
+    problem_clarity: PillarProblemClarity
+    integration_feasibility: PillarIntegration
+    governance_and_safety: PillarGovernance
+
+
+class QuestionItem(BaseModel):
+    question: str
+    target_pillar: str
+    technical_reasoning: str
+
+
+class ClarificationQuestionsModel(BaseModel):
+    questions: List[QuestionItem] = Field(default_factory=list, max_length=4)
+
+
+# ── LLM Extraction Schema (Legacy Compatibility) ─────────────────────
 
 class FactExtraction(BaseModel):
     """Structured facts extracted by LLM from business requests."""
