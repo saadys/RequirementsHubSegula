@@ -12,6 +12,7 @@ from backend.config import MAX_CLARIFICATION_ROUNDS
 from backend.graph.builder import get_compiled_graph
 from backend.models.BaseDataModel import get_db
 from backend.models.ClarificationModel import ClarificationModel
+from backend.models.FactExtractionModel import FactExtractionModel
 from backend.models.ReportModel import ReportModel
 from backend.models.ScoringModel import ScoringModel
 from backend.models.SubmissionModel import SubmissionModel
@@ -54,7 +55,16 @@ async def get_clarification_questions(request_id: str, db: AsyncSession = Depend
     rounds = sub.clarification_rounds or []
     latest_round = rounds[-1] if rounds else None
     overrides = sub.reviewer_overrides or []
-    decision = overrides[0].new_decision if overrides else (sub.scoring_result.decision if sub.scoring_result else None)
+    scoring = sub.scoring_result
+    decision = overrides[0].new_decision if overrides else (scoring.decision if scoring else None)
+
+    sub_scores = {}
+    veto_triggered = False
+    veto_reasons = []
+    if scoring and scoring.breakdown:
+        sub_scores = scoring.breakdown.get("sub_scores") or scoring.breakdown.get("pillar_scores") or {}
+        veto_triggered = bool(scoring.breakdown.get("veto_triggered", False))
+        veto_reasons = scoring.breakdown.get("veto_reasons") or []
 
     return ClarificationResponse(
         request_id=str(sub.id),
@@ -63,8 +73,11 @@ async def get_clarification_questions(request_id: str, db: AsyncSession = Depend
         max_rounds=MAX_CLARIFICATION_ROUNDS,
         questions=latest_round.questions if latest_round else [],
         answers=latest_round.answers if latest_round else [],
-        score=sub.scoring_result.score if sub.scoring_result else None,
+        score=scoring.score if scoring else None,
         decision=decision,
+        sub_scores=sub_scores,
+        veto_triggered=veto_triggered,
+        veto_reasons=veto_reasons,
         report_type=sub.report.report_type if sub.report else None,
         report=sub.report.content if sub.report else None,
     )
@@ -138,15 +151,34 @@ async def submit_clarification_answers(
     status_str = _determine_status(updated_state)
     await sub_model.update_status(request_id, status_str)
 
+    if updated_state.get("extracted_facts"):
+        fact_model = FactExtractionModel(db)
+        await fact_model.create_or_update(
+            request_id,
+            updated_state.get("extracted_facts") or {},
+        )
+
     if updated_state.get("score") is not None or updated_state.get("decision"):
         scoring_model = ScoringModel(db)
+        sub_scores_val = updated_state.get("sub_scores") or {}
+        veto_trig = updated_state.get("veto_triggered", False)
+        veto_reasons_val = updated_state.get("veto_reasons") or []
+
+        breakdown_payload = {
+            "sub_scores": sub_scores_val,
+            "veto_triggered": veto_trig,
+            "veto_reasons": veto_reasons_val,
+        }
+        if updated_state.get("score_breakdown"):
+            breakdown_payload["legacy_breakdown"] = updated_state.get("score_breakdown")
+
         await scoring_model.create_or_update(
             request_id,
             {
                 "score": updated_state.get("score"),
                 "percentage": updated_state.get("score"),
                 "decision": updated_state.get("decision"),
-                "breakdown": updated_state.get("score_breakdown") or {},
+                "breakdown": breakdown_payload,
             },
         )
 
@@ -171,6 +203,15 @@ async def submit_clarification_answers(
     refreshed_sub = await sub_model.get_by_id_with_relations(request_id)
     ref_rounds = refreshed_sub.clarification_rounds or []
     ref_latest = ref_rounds[-1] if ref_rounds else None
+    ref_scoring = refreshed_sub.scoring_result
+
+    ref_sub_scores = {}
+    ref_veto_trig = False
+    ref_veto_reasons = []
+    if ref_scoring and ref_scoring.breakdown:
+        ref_sub_scores = ref_scoring.breakdown.get("sub_scores") or ref_scoring.breakdown.get("pillar_scores") or {}
+        ref_veto_trig = bool(ref_scoring.breakdown.get("veto_triggered", False))
+        ref_veto_reasons = ref_scoring.breakdown.get("veto_reasons") or []
 
     return ClarificationResponse(
         request_id=str(refreshed_sub.id),
@@ -179,8 +220,12 @@ async def submit_clarification_answers(
         max_rounds=MAX_CLARIFICATION_ROUNDS,
         questions=ref_latest.questions if ref_latest else [],
         answers=ref_latest.answers if ref_latest else existing_answers,
-        score=refreshed_sub.scoring_result.score if refreshed_sub.scoring_result else None,
-        decision=refreshed_sub.scoring_result.decision if refreshed_sub.scoring_result else None,
+        score=ref_scoring.score if ref_scoring else None,
+        decision=ref_scoring.decision if ref_scoring else None,
+        sub_scores=ref_sub_scores,
+        veto_triggered=ref_veto_trig,
+        veto_reasons=ref_veto_reasons,
         report_type=refreshed_sub.report.report_type if refreshed_sub.report else None,
         report=refreshed_sub.report.content if refreshed_sub.report else None,
     )
+

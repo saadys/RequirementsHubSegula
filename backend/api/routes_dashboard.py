@@ -73,6 +73,14 @@ async def list_pending_requests(
             else (str(sub.created_at) if sub.created_at else None)
         )
 
+        sub_scores = {}
+        veto_triggered = False
+        veto_reasons = []
+        if scoring and scoring.breakdown:
+            sub_scores = scoring.breakdown.get("sub_scores") or scoring.breakdown.get("pillar_scores") or {}
+            veto_triggered = bool(scoring.breakdown.get("veto_triggered", False))
+            veto_reasons = scoring.breakdown.get("veto_reasons") or []
+
         pending_items.append(
             PendingSubmissionItem(
                 request_id=str(sub.id),
@@ -83,6 +91,14 @@ async def list_pending_requests(
                 status=stat,
                 decision=dec,
                 score=scoring.score if scoring else None,
+                sub_scores=sub_scores,
+                veto_triggered=veto_triggered,
+                veto_reasons=veto_reasons,
+                ai_viability_category=fact.ai_viability_category if fact else None,
+                data_readiness_category=fact.data_readiness_category if fact else None,
+                problem_clarity_category=fact.problem_clarity_category if fact else None,
+                integration_category=fact.integration_category if fact else None,
+                governance_category=fact.governance_category if fact else None,
                 clarification_round=clar_round,
                 created_at=created_at_str,
                 missing_fields=missing_fields,
@@ -92,6 +108,7 @@ async def list_pending_requests(
         )
 
     return pending_items
+
 
 
 @router.post(

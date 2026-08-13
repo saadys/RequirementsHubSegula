@@ -1,76 +1,84 @@
 """
 Generate Questions Node
 
-When feasibility score is 40-69 (NEEDS_CLARIFICATION), generates targeted
-clarification questions based on gaps identified in the extracted facts.
-
-Owner: Track A
+When feasibility score indicates clarification is required (e.g. 20-69),
+generates dynamic, targeted clarification questions based on weak pillars
+and identified blockers in the extracted facts.
 """
 
+import json
 from backend.contracts.state import PipelineState
-from backend.schemas import ClarificationQuestions
+from backend.schemas import ClarificationQuestionsModel
 from backend.services.llm import get_clarification_llm
 
 
 def generate_questions(state: PipelineState) -> dict:
-    """Node that generates targeted clarification questions based on uncertain fields."""
+    """Node that generates targeted clarification questions based on weak pillars and gaps."""
     facts = state.get("extracted_facts", {}) or {}
+    sub_scores = state.get("sub_scores", {})
+    veto_reasons = state.get("veto_reasons", [])
     current_round = state.get("clarification_round", 0)
-    
-    # 1. Identify specific gaps or uncertainties in extracted facts
+
+    # 1. Identify specific gaps or uncertainties across the 5 pillars
     gaps = []
     
-    if not facts.get("has_clear_problem_statement", True):
-        gaps.append("Problem description is unclear or lacks specific business pain points.")
-        
-    if not facts.get("problem_is_ai_solvable", True):
-        gaps.append("It is uncertain if the described problem can be realistically solved using AI/ML.")
-        
-    if facts.get("problem_category") == "unknown":
-        gaps.append("The AI problem category (e.g. NLP, Computer Vision, Classification) could not be determined.")
-        
-    if facts.get("data_availability") in ["none", "partial"]:
-        gaps.append(f"Data availability is rated as '{facts.get('data_availability')}'. Details on data sources, format, or access are missing.")
-        
-    if facts.get("data_volume_sufficient") in ["no", "unknown"]:
-        gaps.append(f"Data volume sufficiency is rated as '{facts.get('data_volume_sufficient')}'. Exact volume estimates (e.g. rows, documents, images) are unspecified.")
-        
-    if facts.get("ai_technique_identified") == "unknown":
-        gaps.append("A specific AI technique could not be identified due to missing technical requirements.")
+    # Check 5-pillar facts
+    ai_viability = facts.get("ai_viability") if isinstance(facts.get("ai_viability"), dict) else {}
+    data_readiness = facts.get("data_readiness") if isinstance(facts.get("data_readiness"), dict) else {}
+    problem_clarity = facts.get("problem_clarity") if isinstance(facts.get("problem_clarity"), dict) else {}
+    integration = facts.get("integration_feasibility") if isinstance(facts.get("integration_feasibility"), dict) else {}
+    governance = facts.get("governance_and_safety") if isinstance(facts.get("governance_and_safety"), dict) else {}
+
+    if data_readiness.get("category") in ["NONE", "UNLABELED_OR_MESSY"]:
+        gaps.append(f"Data Readiness ({data_readiness.get('category')}): {data_readiness.get('reason', 'Missing clear volume, format, or label access.')}")
+
+    if problem_clarity.get("category") in ["VAGUE", "PARTIAL", "CONTRADICTORY"]:
+        gaps.append(f"Problem Clarity ({problem_clarity.get('category')}): {problem_clarity.get('reason', 'Missing concrete KPI, volume, or defined process boundaries.')}")
+
+    if integration.get("category") == "COMPLEX":
+        gaps.append(f"Integration Feasibility (COMPLEX): {integration.get('reason', 'Complex legacy or real-time infrastructure dependencies.')}")
+
+    if governance.get("category") in ["MODERATE_RISK", "CRITICAL_RISK"]:
+        gaps.append(f"Governance & Ethics ({governance.get('category')}): {governance.get('reason', 'Sensitive data or compliance boundary needed.')}")
+
+    if not gaps and veto_reasons:
+        gaps.extend(veto_reasons)
 
     # 2. Build prompt for the clarification LLM
     system_prompt = (
-        "You are a Senior AI Systems Analyst at Segula Technologies.\n"
-        "An internal business team submitted an AI project request, but our initial feasibility evaluation "
-        "identified critical gaps or uncertainties. Your task is to generate up to 5 targeted, concise, and polite "
-        "clarification questions for the team so we can complete an accurate feasibility assessment.\n\n"
-        "Guidelines:\n"
-        "1. Direct each question at a specific missing detail (data size/format, current manual process, system integration, etc.).\n"
-        "2. Keep questions easy to understand for business users.\n"
-        "3. Provide a brief technical reasoning for why each question is necessary."
+        "You are a Senior AI Requirements Engineer at Segula Technologies.\n"
+        "An internal business team submitted an AI project request, but the feasibility evaluation "
+        "requires targeted clarification. Your task is to generate 2 to 3 precise, polite, and actionable "
+        "clarification questions to resolve the data, scope, or integration ambiguities."
     )
+
+    gaps_text = "\n".join(f"- {gap}" for gap in gaps) if gaps else "- Requirement scope or data volume details are incomplete."
+    summary_text = facts.get("project_summary") or facts.get("summary", "No summary available.")
     
-    gaps_text = "\n".join(f"- {gap}" for gap in gaps) if gaps else "- General requirement details are incomplete."
-    summary_text = facts.get("summary", "No summary available.")
-    
-    user_content = (
-        f"### Request Summary:\n{summary_text}\n\n"
-        f"### Identified Gaps & Uncertainties:\n{gaps_text}"
-    )
-    
+    user_content = f"""The project requires clarification before a final feasibility decision can be made.
+Project Summary: {summary_text}
+Sub-Scores: {json.dumps(sub_scores)}
+Identified Gaps / Blockers:
+{gaps_text}
+
+Generate 2-3 precise questions targeted at resolving the data, scope, or clarity ambiguities."""
+
     messages = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]
-    
+
     # 3. Call structured LLM for clarification questions
     llm = get_clarification_llm()
-    result: ClarificationQuestions = llm.generate_structured_output(
+    result: ClarificationQuestionsModel = llm.generate_structured_output(
         prompt=messages,
-        response_schema=ClarificationQuestions,
+        response_schema=ClarificationQuestionsModel,
     )
-    
+
+    questions_payload = [q.model_dump() for q in result.questions]
+
     return {
-        "clarification_questions": result.questions,
+        "clarification_questions": questions_payload,
         "clarification_round": current_round + 1,
     }
+

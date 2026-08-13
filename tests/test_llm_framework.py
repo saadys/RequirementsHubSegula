@@ -12,7 +12,18 @@ from backend.LLM.providers.fallback_provider import FallbackLLMProvider
 from backend.LLM.providers.GeminiProvider import GeminiProvider
 from backend.LLM.providers.openai_provider import OpenAIProvider
 from backend.services.llm import get_llm, get_structured_llm, get_clarification_llm
-from backend.schemas import FactExtraction, ClarificationQuestions
+from backend.schemas import (
+    FactExtraction,
+    ClarificationQuestions,
+    ClarificationQuestionsModel,
+    QuestionItem,
+    CategoricalFactExtraction,
+    PillarAIViability,
+    PillarDataReadiness,
+    PillarProblemClarity,
+    PillarIntegration,
+    PillarGovernance,
+)
 
 
 class DummySchema(BaseModel):
@@ -27,7 +38,18 @@ class MockSuccessProvider(BaseLLMProvider):
         return "Success"
 
     def generate_structured_output(self, prompt, response_schema, system_prompt=None, temperature=None):
-        if response_schema == FactExtraction:
+        if response_schema == CategoricalFactExtraction:
+            return CategoricalFactExtraction(
+                ai_viability=PillarAIViability(category="HIGHLY_VIABLE", reason="Clear NLP task"),
+                data_readiness=PillarDataReadiness(category="READY", reason="Sufficient data"),
+                problem_clarity=PillarProblemClarity(category="CLEAR", reason="Clear scope"),
+                integration_feasibility=PillarIntegration(category="SIMPLE", reason="API integration"),
+                governance_and_safety=PillarGovernance(category="SAFE", reason="No privacy risks"),
+                identified_technique="NLP / LLM",
+                project_summary="Valid AI project request.",
+            )
+
+        elif response_schema == FactExtraction:
             return FactExtraction(
                 has_clear_problem_statement=True,
                 problem_is_ai_solvable=True,
@@ -42,12 +64,20 @@ class MockSuccessProvider(BaseLLMProvider):
                 extracted_requirements=["Fast query time"],
                 summary="Valid AI project request."
             )
-        elif response_schema == ClarificationQuestions:
-            return ClarificationQuestions(
-                reasoning=["Missing user volume details in request."],
-                questions=["How many users will access the system?"]
+        elif response_schema in (ClarificationQuestions, ClarificationQuestionsModel):
+            return ClarificationQuestionsModel(
+                questions=[
+                    QuestionItem(
+                        target_pillar="problem_clarity",
+                        question="How many users will access the system?",
+                        technical_reasoning="To assess scalability and infrastructure capacity.",
+                    )
+                ]
             )
         return response_schema(summary="Mock Result")
+
+
+
 
     def health_check(self) -> bool:
         return True
@@ -167,7 +197,8 @@ def test_llm_analyze_node_integration(mock_get_llm):
     }
     result = llm_analyze(state)
     assert "extracted_facts" in result
-    assert result["extracted_facts"]["problem_category"] == "nlp"
+    assert result["extracted_facts"]["ai_viability"]["category"] == "HIGHLY_VIABLE"
+    assert result["extracted_facts"]["identified_technique"] == "NLP / LLM"
 
 
 @patch("backend.nodes.generate_questions.get_clarification_llm")
@@ -176,9 +207,16 @@ def test_generate_questions_node_integration(mock_get_llm):
 
     mock_get_llm.return_value = MockSuccessProvider()
     state = {
+        "form_data": {
+            "project_name": "Vague Project",
+            "problem_description": "We want AI."
+        },
         "extracted_facts": {
-            "has_clear_problem_statement": False,
-            "summary": "Unclear request"
+            "ai_viability": {"category": "MARGINAL", "reason": "Unclear scope"},
+            "data_readiness": {"category": "UNLABELED_OR_MESSY", "reason": "No labels"},
+            "problem_clarity": {"category": "VAGUE", "reason": "Vague goals"},
+            "integration_feasibility": {"category": "COMPLEX", "reason": "Unknown"},
+            "governance_and_safety": {"category": "SAFE", "reason": "Safe"},
         },
         "clarification_round": 0
     }
@@ -186,6 +224,7 @@ def test_generate_questions_node_integration(mock_get_llm):
     assert "clarification_questions" in result
     assert len(result["clarification_questions"]) == 1
     assert result["clarification_round"] == 1
+
 
 
 def test_corporate_support_template_module():

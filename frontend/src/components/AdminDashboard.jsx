@@ -10,9 +10,12 @@ import {
   X,
   Send,
   BookOpen,
-  FileText
+  FileText,
+  ShieldAlert,
+  Layers
 } from 'lucide-react';
 import { fetchPendingDashboard, overrideDecision, fetchReport } from '../api/client';
+
 
 export default function AdminDashboard({ onViewReport }) {
   const [pendingItems, setPendingItems] = useState([]);
@@ -253,9 +256,16 @@ export default function AdminDashboard({ onViewReport }) {
                     </td>
 
                     <td style={{ padding: '14px 16px' }}>
-                      <span className={`badge ${badgeClass}`} style={{ fontSize: '0.75rem' }}>
-                        {badgeLabel}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span className={`badge ${badgeClass}`} style={{ fontSize: '0.75rem' }}>
+                          {badgeLabel}
+                        </span>
+                        {sub.veto_triggered && (
+                          <span style={{ fontSize: '0.68rem', background: 'rgba(239, 68, 68, 0.2)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                            ⛔ VETO
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     <td style={{ padding: '14px 16px', fontWeight: 800, color: sub.score >= 70 ? '#34D399' : '#FBBF24' }}>
@@ -349,6 +359,49 @@ export default function AdminDashboard({ onViewReport }) {
                 </button>
               )}
             </div>
+
+            {/* Veto Alert in Modal */}
+            {selectedSub.veto_triggered && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '12px 16px', borderRadius: '10px', marginBottom: '16px' }}>
+                <div style={{ color: '#F87171', fontWeight: 700, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                  <ShieldAlert size={16} /> Circuit-Breaker Veto Triggered
+                </div>
+                {selectedSub.veto_reasons && selectedSub.veto_reasons.length > 0 && (
+                  <ul style={{ margin: 0, paddingLeft: '18px', color: '#FCA5A5', fontSize: '0.78rem' }}>
+                    {selectedSub.veto_reasons.map((r, i) => (
+                      <li key={i}>{r}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* 5 Pillar Sub-Scores Chips */}
+            {selectedSub.sub_scores && Object.keys(selectedSub.sub_scores).length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', marginBottom: '20px' }}>
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#94A3B8' }}>🤖 AI Viability</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#F8FAFC' }}>{selectedSub.sub_scores.ai_viability ?? 0}/30</div>
+                </div>
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#94A3B8' }}>📊 Data Readiness</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#F8FAFC' }}>{selectedSub.sub_scores.data_readiness ?? 0}/25</div>
+                </div>
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#94A3B8' }}>🎯 Clarity</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#F8FAFC' }}>{selectedSub.sub_scores.problem_clarity ?? 0}/20</div>
+                </div>
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#94A3B8' }}>🔌 Integration</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#F8FAFC' }}>{selectedSub.sub_scores.integration ?? 0}/15</div>
+                </div>
+                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#94A3B8' }}>🛡️ Governance</div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 800, color: '#F8FAFC' }}>{selectedSub.sub_scores.governance ?? 0}/10</div>
+                </div>
+              </div>
+            )}
+
 
             {/* Inline Report Preview Accordion */}
             {modalReportText && (
