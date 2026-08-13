@@ -24,89 +24,55 @@ SYSTEM_ROLE_TEMPLATE = Template(SYSTEM_ROLE)
 
 EXTRACTION_RULES = """## Your Task
 
-Carefully read the team's project request (problem description, current process, expected outcome, and any uploaded documents). Then extract the following structured facts.
+Carefully read the team's project request (problem description, current process, expected outcome, available data, and any clarifications or uploaded documents). Then classify the project across the 5 Universal Feasibility Pillars with technical justifications.
 
-## Field-by-Field Extraction Guidelines
+## Field-by-Field Extraction Guidelines (5 Pillars)
 
-### Problem Understanding
+### 1. AI Technical Viability (`ai_viability`)
+- **category** (HIGHLY_VIABLE | MARGINAL | NOT_AI | IMPOSSIBLE):
+  - `HIGHLY_VIABLE`: Clear ML/NLP/CV automation (e.g. OCR + matching, RAG document search, predictive maintenance from sensor data).
+  - `MARGINAL`: Commodity task where standard commercial SaaS or rule-based software is strictly better.
+  - `NOT_AI`: Pure deterministic script, SQL query, cron job, CSV converter, hardware cooling/fan replacement, or static rules engine.
+  - `IMPOSSIBLE`: Defies physics, math, causality, or current AI science (e.g. 100% lottery prediction, psychic intent, sentient AGI).
+- **reason**: 1-2 sentences technical justification.
 
-- **has_clear_problem_statement** (true/false):
-  Set to `true` only if the team describes a specific, concrete problem with a clear pain point.
-  Set to `false` if the request is vague ("we want AI"), lacks a defined problem, or only states a desired outcome without explaining the current pain.
+### 2. Data Readiness & Availability (`data_readiness`)
+- **category** (READY | UNLABELED_OR_MESSY | NONE):
+  - `READY`: Structured, labeled, or clean accessible data exists (e.g. 1,200 PDF invoices monthly, clean SQL database, annotated image dataset).
+  - `UNLABELED_OR_MESSY`: Raw data exists in bulk but lacks labels, annotations, or structure (e.g. raw unstructured text, unindexed logs).
+  - `NONE`: No data exists yet or it is scattered on personal laptops without access permissions.
+- **reason**: 1-2 sentences data assessment.
 
-- **problem_is_ai_solvable** (true/false):
-  Set to `true` if the described problem has a clear input→output mapping that AI/ML can realistically address.
-  Set to `false` if the problem is purely organizational, political, or requires human judgment that cannot be modeled.
-  When in doubt, lean toward `true` but flag uncertainty in `risks_identified`.
+### 3. Problem Scope & Clarity (`problem_clarity`)
+- **category** (CLEAR | PARTIAL | CONTRADICTORY | VAGUE):
+  - `CLEAR`: Concrete workflow, defined inputs/outputs, explicit pain point, and measurable KPIs.
+  - `PARTIAL`: Clear business intent but missing volume, format, or success threshold.
+  - `CONTRADICTORY`: Contains mutually exclusive or paradoxical requirements (e.g. 100% autonomous with 100% manual human approval, zero data with zero errors).
+  - `VAGUE`: Pure buzzwords, generic hype, or no concrete business workflow described.
+- **reason**: 1-2 sentences problem clarity assessment.
 
-- **problem_category** (one of: classification, regression, clustering, nlp, computer_vision, time_series, recommendation, optimization, generative, other, unknown):
-  Choose based on the **dominant AI task**, not the business domain.
-  Examples:
-  - A chatbot that searches documents → `nlp` (not `generative`)
-  - Detecting defects in images → `computer_vision`
-  - Scoring candidates based on CV features → `classification`
-  - Predicting machine failures over time → `time_series`
-  - Generating reports from structured data → `generative`
-  If the request is too vague to determine → `unknown`.
+### 4. Integration Feasibility (`integration_feasibility`)
+- **category** (SIMPLE | MODERATE | COMPLEX):
+  - `SIMPLE`: Standalone UI, batch file export, clean REST API, or independent dashboard.
+  - `MODERATE`: Standard enterprise systems (SharePoint, Jira, modern ERP read operations).
+  - `COMPLEX`: Legacy SAP write permissions, real-time robotics, tight hardware coupling, or deep infrastructure dependencies.
+- **reason**: 1-2 sentences integration assessment.
 
-### Data Assessment
+### 5. Governance, Safety & Ethics (`governance_and_safety`)
+- **category** (SAFE | MODERATE_RISK | CRITICAL_RISK):
+  - `SAFE`: Standard internal business data with no compliance or ethical issues.
+  - `MODERATE_RISK`: Requires privacy review, GDPR consent, or human-in-the-loop oversight.
+  - `CRITICAL_RISK`: Phishing tool, credential harvesting, unauthorized employee surveillance, illegal activity, or severe safety hazard.
+- **reason**: 1-2 sentences governance and compliance assessment.
 
-- **data_availability** (none / partial / full):
-  - `full`: The team explicitly states they have labeled, structured, and sufficient data ready to use.
-  - `partial`: The team mentions having some data but it's incomplete, unlabeled, scattered, or they're unsure about volume.
-  - `none`: No data is mentioned, or the team says they don't have relevant data yet.
-  Never assume data exists if the team doesn't mention it.
-
-- **data_volume_sufficient** (yes / no / unknown):
-  - `yes`: The described data volume is clearly adequate for the proposed AI technique.
-  - `no`: The described volume is clearly insufficient (e.g., 50 images for deep learning).
-  - `unknown`: The team didn't specify volume, or you can't determine sufficiency without more information.
-
-### Technical Assessment
-
-- **ai_technique_identified** (string):
-  Recommend the most appropriate specific AI technique based on the problem.
-  Examples: "RAG-based document retrieval", "CNN image classification", "Multi-agent orchestration with LLM", "Random Forest classifier", "LSTM time series forecasting".
-  If the problem is too vague to recommend a technique → set to "unknown".
-
-- **requires_new_research** (true/false):
-  Set to `true` only if the problem requires techniques that don't yet exist or are cutting-edge and unproven in production.
-  Most enterprise AI projects use established techniques → default to `false` unless clearly novel.
-
-- **integration_complexity** (low / medium / high):
-  - `low`: Standalone tool or simple API, no complex system integrations.
-  - `medium`: Needs to connect to 1-2 existing systems (e.g., an ERP, a document store).
-  - `high`: Requires deep integration with multiple legacy systems, real-time data pipelines, or enterprise-wide deployment.
-  Base this on the technical reality described, not on the team's optimism.
-
-- **estimated_effort** (small / medium / large):
-  - `small`: Less than 4 weeks. Simple model, existing data, minimal integration.
-  - `medium`: 4 to 12 weeks. Standard ML pipeline with some integration work.
-  - `large`: More than 12 weeks. Complex system, multiple components, significant data engineering.
-  Base this on the technique complexity and integration scope, NOT on the team's stated deadline or budget.
-
-### Qualitative Fields
-
-- **risks_identified** (list of strings):
-  List concrete, specific risks. Avoid generic statements like "AI might not work".
-  Good examples: "No labeled training data exists yet", "GDPR compliance needed for employee data", "Legacy ERP has no API for integration".
-  If no risks are apparent, return an empty list.
-
-- **extracted_requirements** (list of strings):
-  Pull out every concrete, actionable requirement the team stated or implied.
-  Examples: "Must handle 200 queries per day", "Needs to integrate with SharePoint", "Response time under 10 seconds".
-  Do NOT invent requirements the team didn't state or imply.
-
-- **summary** (string):
-  Write a 2-3 sentence summary of what the team actually needs, written for a technical decision-maker.
-  Be factual, not promotional.
+### Technical Approach & Summary
+- **identified_technique**: Specific recommended technical approach (e.g., "OCR + Fuzzy Matching", "RAG with Hybrid Vector Search", "Standard Python ETL Script (Rule-Based)").
+- **project_summary**: 2-3 sentences concise technical summary of the submission.
 
 ## Critical Rules
-
-1. **Honesty over optimism**: If information is missing or ambiguous, use "unknown", "none", or flag it in risks. Never fabricate confidence.
-2. **Evidence-based**: Every field must be supported by something the team wrote or provided. Do not invent details.
-3. **Technical objectivity**: Evaluate based on the engineering reality, not the team's enthusiasm or stated timeline.
-4. **Completeness**: Fill every field. Use "unknown" values rather than skipping fields."""
+1. **Honesty over optimism**: If a project does not need AI, classify AI viability as `NOT_AI`.
+2. **Evidence-based**: Every category and reason must be supported by the user's input.
+3. **Completeness**: Fill all 5 pillars accurately."""
 
 EXTRACTION_RULES_TEMPLATE = Template(EXTRACTION_RULES)
 

@@ -63,10 +63,15 @@ async def test_rag_node_finds_similar_project():
     mock_meta = {"id": "irfane-001", "project_name": "IRFANE Chatbot"}
     mock_db = AsyncMock()
 
-    # Score 0.70 → above RAG_SIMILAR_THRESHOLD (0.60) but below RAG_EXACT_MATCH_THRESHOLD (0.75)
+    from backend import config
+    sim_score = min(0.99, getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60) + 0.01)
+    exact_threshold = getattr(config, "RAG_EXACT_MATCH_THRESHOLD", 0.83)
+    if sim_score >= exact_threshold:
+        sim_score = exact_threshold - 0.01
+
     with patch(
         "backend.nodes.rag_search.search_similar",
-        return_value=[("Problem: HR issues", 0.70, mock_meta)]
+        return_value=[("Problem: HR issues", sim_score, mock_meta)]
     ):
         state = {
             "form_data": {
@@ -75,6 +80,7 @@ async def test_rag_node_finds_similar_project():
             "parsed_files_text": [],
         }
         result = await rag_search(state, db=mock_db)
+
 
     assert "similar_projects" in result
     assert len(result["similar_projects"]) == 1

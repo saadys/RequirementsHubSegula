@@ -175,9 +175,12 @@ class SubmissionResponse(BaseModel):
     status: str
     decision: Optional[str] = None
     score: Optional[int] = None
+    sub_scores: Dict[str, int] = Field(default_factory=dict, description="5-pillar sub-scores")
+    veto_triggered: bool = Field(default=False, description="Whether a circuit breaker veto was triggered")
+    veto_reasons: List[str] = Field(default_factory=list, description="Veto reasons if triggered")
     report_type: Optional[str] = None
     missing_fields: List[str] = Field(default_factory=list)
-    clarification_questions: List[str] = Field(default_factory=list)
+    clarification_questions: List[Any] = Field(default_factory=list)
     parsed_files_text: List[str] = Field(default_factory=list)
     report: Optional[str] = None
     created_at: Optional[str] = None
@@ -229,7 +232,22 @@ class ReportResponse(BaseModel):
         None, description="Full Markdown content of the report"
     )
     decision: Optional[str] = Field(
-        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION"
+        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION, FAST_TRACK"
+    )
+    score: Optional[int] = Field(
+        None, description="Feasibility score (0-100)"
+    )
+    sub_scores: Dict[str, int] = Field(
+        default_factory=dict,
+        description="5-pillar sub-score breakdown",
+    )
+    veto_triggered: bool = Field(
+        default=False,
+        description="Whether a circuit-breaker veto was triggered",
+    )
+    veto_reasons: List[str] = Field(
+        default_factory=list,
+        description="List of circuit-breaker veto reasons",
     )
     is_available: bool = Field(
         False, description="Whether the report has been generated and is ready for download"
@@ -247,11 +265,27 @@ class ScoreResponse(BaseModel):
         None, description="Overall score percentage"
     )
     decision: Optional[str] = Field(
-        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION"
+        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION, FAST_TRACK"
+    )
+    sub_scores: Dict[str, int] = Field(
+        default_factory=dict,
+        description="5-pillar sub-scores (ai_viability, data_readiness, problem_clarity, integration, governance)",
+    )
+    veto_triggered: bool = Field(
+        default=False,
+        description="Whether a circuit-breaker veto was triggered",
+    )
+    veto_reasons: List[str] = Field(
+        default_factory=list,
+        description="List of circuit-breaker veto reasons",
     )
     breakdown: Dict[str, Any] = Field(
         default_factory=dict,
-        description="7-criterion score breakdown dict detailing criteria points and maximums",
+        description="Score breakdown dict detailing criteria points or sub-scores",
+    )
+    pillars: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Categorical breakdown per pillar if available",
     )
 
 
@@ -294,10 +328,13 @@ class ClarificationResponse(BaseModel):
     status: str
     clarification_round: int
     max_rounds: int = MAX_CLARIFICATION_ROUNDS
-    questions: List[str] = Field(default_factory=list)
+    questions: List[Any] = Field(default_factory=list)
     answers: List[str] = Field(default_factory=list)
     score: Optional[int] = None
     decision: Optional[str] = None
+    sub_scores: Dict[str, int] = Field(default_factory=dict)
+    veto_triggered: bool = Field(default=False)
+    veto_reasons: List[str] = Field(default_factory=list)
     report_type: Optional[str] = None
     report: Optional[str] = None
 
@@ -342,8 +379,17 @@ class PendingSubmissionItem(BaseModel):
     status: str
     decision: Optional[str] = None
     score: Optional[int] = None
+    sub_scores: Dict[str, int] = Field(default_factory=dict)
+    veto_triggered: bool = False
+    veto_reasons: List[str] = Field(default_factory=list)
+    ai_viability_category: Optional[str] = None
+    data_readiness_category: Optional[str] = None
+    problem_clarity_category: Optional[str] = None
+    integration_category: Optional[str] = None
+    governance_category: Optional[str] = None
     clarification_round: int = 0
     created_at: Optional[str] = None
     missing_fields: List[str] = Field(default_factory=list)
     has_report: bool = False
     report_type: Optional[str] = None
+

@@ -50,4 +50,16 @@ An existing AI solution matching your requirement with high confidence (>={match
     return {
         "report": report_text,
         "report_type": "fast_track",
+        "decision": "FAST_TRACK",
+        "score": 95,
+        "sub_scores": {
+            "ai_viability": 30,
+            "data_readiness": 25,
+            "problem_clarity": 20,
+            "integration_feasibility": 10,
+            "governance_and_safety": 10,
+        },
+        "veto_triggered": False,
+        "veto_reasons": [],
     }
+

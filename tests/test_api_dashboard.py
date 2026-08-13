@@ -75,3 +75,74 @@ async def test_dashboard_pending_and_override(async_client: AsyncClient, seeded_
     sub_data = sub_res.json()
     assert sub_data["decision"] == "GO"
     assert sub_data["status"] == "COMPLETED"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_5_pillar_metadata(async_client: AsyncClient, db_session, seeded_department):
+    """Test dashboard pending items serialization of 5-pillar categorizations and veto flags."""
+    import uuid
+    from backend.models.SubmissionModel import SubmissionModel
+    from backend.models.FactExtractionModel import FactExtractionModel
+    from backend.models.ScoringModel import ScoringModel
+    from backend.models.db_schemes.requirementshub.schemes.submission import Submission
+
+    req_uuid = uuid.uuid4()
+    req_id = str(req_uuid)
+
+    sub_model = SubmissionModel(db_session)
+    sub = Submission(
+        id=req_uuid,
+        project_name="Dashboard 5 Pillar Test",
+        department_id="corporate_support",
+        status="NEEDS_CLARIFICATION",
+    )
+    await sub_model.create_submission(sub)
+
+    fact_model = FactExtractionModel(db_session)
+    await fact_model.create_or_update(
+        req_id,
+        {
+            "ai_viability": {"category": "VIABLE", "reason": "Standard NLP"},
+            "data_readiness": {"category": "PARTIAL", "reason": "Missing labeled samples"},
+            "problem_clarity": {"category": "AMBIGUOUS", "reason": "Unclear success metrics"},
+            "integration_feasibility": {"category": "MODERATE", "reason": "Custom webhook required"},
+            "governance_and_safety": {"category": "MEDIUM_RISK", "reason": "Internal usage only"},
+        },
+    )
+
+    scoring_model = ScoringModel(db_session)
+    await scoring_model.create_or_update(
+        req_id,
+        {
+            "score": 45,
+            "percentage": 45,
+            "decision": "NEEDS_CLARIFICATION",
+            "breakdown": {
+                "sub_scores": {
+                    "ai_viability": 20,
+                    "data_readiness": 10,
+                    "problem_clarity": 10,
+                    "integration": 5,
+                    "governance": 0,
+                },
+                "veto_triggered": False,
+                "veto_reasons": [],
+            },
+        },
+    )
+
+    pending_res = await async_client.get("/api/dashboard/pending")
+    assert pending_res.status_code == 200
+    pending_items = pending_res.json()
+    matching = [p for p in pending_items if p["request_id"] == req_id]
+    assert len(matching) == 1
+    item = matching[0]
+
+    assert item["score"] == 45
+    assert item["decision"] == "NEEDS_CLARIFICATION"
+    assert item["sub_scores"]["ai_viability"] == 20
+    assert item["ai_viability_category"] == "VIABLE"
+    assert item["data_readiness_category"] == "PARTIAL"
+    assert item["problem_clarity_category"] == "AMBIGUOUS"
+    assert item["veto_triggered"] is False
+
