@@ -146,3 +146,85 @@ async def test_dashboard_5_pillar_metadata(async_client: AsyncClient, db_session
     assert item["problem_clarity_category"] == "AMBIGUOUS"
     assert item["veto_triggered"] is False
 
+
+@pytest.mark.asyncio
+async def test_ingest_historic_project_not_found(async_client: AsyncClient):
+    """Test 404 response when attempting to ingest a non-existent submission."""
+    payload = {
+        "project_name": "Non-existent Project",
+        "department": "corporate_support",
+        "problem_description": "Valid problem description for testing 404 response.",
+        "solution_description": "Valid solution description for testing 404 response.",
+        "outcome": "Valid outcome metrics achieved.",
+    }
+    res = await async_client.post(
+        "/api/dashboard/00000000-0000-0000-0000-000000000000/ingest-historic",
+        json=payload,
+    )
+    assert res.status_code == 404
+    assert "not found" in res.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_ingest_historic_project_validation_error(async_client: AsyncClient):
+    """Test 422 response when required fields are missing or invalid."""
+    res = await async_client.post(
+        "/api/dashboard/00000000-0000-0000-0000-000000000000/ingest-historic",
+        json={"project_name": "Incomplete"},
+    )
+    assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_ingest_historic_project_success(async_client: AsyncClient, seeded_department):
+    """Test successful ingestion of a completed project into pgvector knowledge base."""
+    from unittest.mock import patch
+
+    # 1. Create a submission first
+    payload = {
+        "project_name": "Autonomous Drone Inspection",
+        "department": "aerospace",
+        "team_contact_name": "Jean Dupont",
+        "team_contact_email": "jean.dupont@segula.fr",
+        "problem_description": "Automated crack inspection on aircraft wings using drone video feed.",
+        "current_process": "Manual scaffolding inspection taking 48 hours.",
+        "expected_outcome": "Real-time edge detection in 15 minutes.",
+        "deadline_urgency": "high",
+        "department_specific": {},
+    }
+    create_res = await async_client.post("/api/submissions/", json=payload)
+    assert create_res.status_code == 201
+    req_id = create_res.json()["request_id"]
+
+    # 2. Ingest into knowledge base (with mocked embedding)
+    ingest_payload = {
+        "project_name": "Autonomous Drone Inspection",
+        "department": "aerospace",
+        "problem_description": "Automated crack inspection on aircraft wings using drone video feed.",
+        "solution_description": "Edge YOLOv8 segmentation on NVIDIA Jetson Orin with TensorRT runtime.",
+        "outcome": "99.1% precision in crack detection, reduced inspection time from 48h to 15min.",
+        "contact_person": "Jean Dupont",
+        "year": 2026,
+        "ai_techniques": ["YOLOv8", "TensorRT", "Jetson Orin", "Edge AI"],
+        "tags": ["aerospace", "inspection", "drones", "cv"],
+        "lessons_learned": "Lighting variations compensated with real-time histogram equalization.",
+    }
+
+    with patch("backend.services.vectorstore.generate_embedding", return_value=[0.02] * 768):
+        ingest_res = await async_client.post(
+            f"/api/dashboard/{req_id}/ingest-historic",
+            json=ingest_payload,
+        )
+
+    assert ingest_res.status_code == 201
+    ingest_data = ingest_res.json()
+    assert ingest_data["request_id"] == req_id
+    assert ingest_data["historic_id"].startswith("HIST-2026-")
+    assert ingest_data["status"] == "IMPLEMENTED"
+    assert ingest_data["embedding_dimension"] == 768
+
+    # 3. Verify submission status updated to IMPLEMENTED
+    sub_res = await async_client.get(f"/api/submissions/{req_id}")
+    assert sub_res.status_code == 200
+    assert sub_res.json()["status"] == "IMPLEMENTED"
+

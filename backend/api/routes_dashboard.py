@@ -17,9 +17,12 @@ from backend.schemas import (
     Decision,
     DecisionOverrideInput,
     DecisionOverrideResponse,
+    HistoricProjectIngestInput,
+    HistoricProjectIngestResponse,
     PendingSubmissionItem,
     SubmissionStatus,
 )
+from backend.services.vectorstore import ingest_project
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -160,3 +163,47 @@ async def override_submission_decision(
         manual_override=True,
         updated_at=datetime.now().isoformat(),
     )
+
+
+@router.post(
+    "/{request_id}/ingest-historic",
+    response_model=HistoricProjectIngestResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Ingest delivered project into historic vector knowledge base",
+)
+async def ingest_delivered_project(
+    request_id: str,
+    payload: HistoricProjectIngestInput,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Vectorizes a delivered project and stores it into PostgreSQL pgvector knowledge base.
+    Updates the submission status to 'IMPLEMENTED' and enables instant semantic retrieval.
+    """
+    sub_model = SubmissionModel(db)
+    sub = await sub_model.get_by_id(request_id)
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Submission '{request_id}' not found",
+        )
+
+    try:
+        record, historic_id = await ingest_project(
+            submission_id=request_id,
+            project_data=payload,
+            db=db,
+        )
+        return HistoricProjectIngestResponse(
+            request_id=request_id,
+            historic_id=historic_id,
+            project_name=record.project_name,
+            status=SubmissionStatus.IMPLEMENTED.value,
+            embedding_dimension=768,
+            message="Project successfully vectorized and ingested into knowledge base.",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to ingest project into knowledge base: {str(exc)}",
+        )

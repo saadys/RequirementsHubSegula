@@ -15,6 +15,8 @@ from backend.schemas.Schemas import (
     DepartmentSummary,
     FactExtraction,
     FormSubmission,
+    HistoricProjectIngestInput,
+    HistoricProjectIngestResponse,
     PendingSubmissionItem,
     PillarAIViability,
     PillarDataReadiness,
@@ -57,4 +59,6 @@ __all__ = [
     "DecisionOverrideInput",
     "DecisionOverrideResponse",
     "PendingSubmissionItem",
+    "HistoricProjectIngestInput",
+    "HistoricProjectIngestResponse",
 ]
