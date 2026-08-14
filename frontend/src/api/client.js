@@ -139,3 +139,10 @@ export async function overrideDecision(requestId, { decision, reviewer_notes, re
     body: JSON.stringify({ decision, reviewer_notes, reviewer_name }),
   });
 }
+
+export async function ingestHistoricProject(requestId, projectData) {
+  return request(`/dashboard/${requestId}/ingest-historic`, {
+    method: 'POST',
+    body: JSON.stringify(projectData),
+  });
+}

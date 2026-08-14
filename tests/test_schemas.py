@@ -245,3 +245,58 @@ def test_pipeline_state_new_fields():
     assert state["veto_triggered"] is False
     assert state["veto_reasons"] == []
 
+
+def test_historic_project_ingest_schemas():
+    """Test HistoricProjectIngestInput and HistoricProjectIngestResponse schemas."""
+    from backend.schemas import (
+        HistoricProjectIngestInput,
+        HistoricProjectIngestResponse,
+        SubmissionStatus,
+    )
+
+    assert SubmissionStatus.IMPLEMENTED.value == "IMPLEMENTED"
+
+    valid_payload = {
+        "project_name": "Automated LiDAR Defect Detector",
+        "department": "automotive",
+        "problem_description": "Detect subtle micro-cracks in composite body panels in real-time.",
+        "solution_description": "Deployed YOLOv8 segmentation on NVIDIA Jetson with TensorRT acceleration.",
+        "outcome": "99.2% defect detection accuracy, reducing inspection time from 15 mins to 8 seconds.",
+        "contact_person": "Jane Doe (Lead AI Engineer)",
+        "year": 2026,
+        "ai_techniques": ["YOLOv8", "TensorRT", "Computer Vision"],
+        "tags": ["automotive", "quality_control", "edge_ai"],
+        "lessons_learned": "Camera calibration under industrial glare required polarized optical filters.",
+    }
+
+    ingest_input = HistoricProjectIngestInput(**valid_payload)
+    assert ingest_input.project_name == "Automated LiDAR Defect Detector"
+    assert ingest_input.department == "automotive"
+    assert len(ingest_input.ai_techniques) == 3
+    assert ingest_input.year == 2026
+
+    # Test missing required field raises ValidationError
+    invalid_payload = valid_payload.copy()
+    del invalid_payload["solution_description"]
+    with pytest.raises(ValidationError):
+        HistoricProjectIngestInput(**invalid_payload)
+
+    # Test short field fails min_length validation
+    invalid_short = valid_payload.copy()
+    invalid_short["outcome"] = "bad"  # < 5 chars
+    with pytest.raises(ValidationError):
+        HistoricProjectIngestInput(**invalid_short)
+
+    # Test response schema
+    response = HistoricProjectIngestResponse(
+        request_id="req-uuid-999",
+        historic_id="HIST-2026-0042",
+        project_name="Automated LiDAR Defect Detector",
+        status=SubmissionStatus.IMPLEMENTED.value,
+        embedding_dimension=768,
+    )
+    assert response.request_id == "req-uuid-999"
+    assert response.historic_id == "HIST-2026-0042"
+    assert response.status == "IMPLEMENTED"
+    assert response.embedding_dimension == 768
+

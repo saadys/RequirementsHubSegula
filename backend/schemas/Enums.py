@@ -14,6 +14,7 @@ class SubmissionStatus(str, Enum):
     INCOMPLETE = "INCOMPLETE"
     FAST_TRACK = "FAST_TRACK"
     PENDING = "PENDING"
+    IMPLEMENTED = "IMPLEMENTED"
 
 
 class Decision(str, Enum):

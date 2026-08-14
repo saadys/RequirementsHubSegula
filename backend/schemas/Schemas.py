@@ -393,3 +393,29 @@ class PendingSubmissionItem(BaseModel):
     has_report: bool = False
     report_type: Optional[str] = None
 
+
+class HistoricProjectIngestInput(BaseModel):
+    """Payload for ingesting a successfully delivered project into the historic vector knowledge base."""
+
+    project_name: str = Field(..., min_length=2, description="Name of the delivered AI project")
+    department: str = Field(..., min_length=2, description="Originating department or business unit")
+    problem_description: str = Field(..., min_length=10, description="Detailed problem statement and initial requirements")
+    solution_description: str = Field(..., min_length=10, description="Real-world delivered AI architecture and methodology")
+    outcome: str = Field(..., min_length=5, description="Actual achieved metric, ROI, accuracy, or business outcome")
+    contact_person: Optional[str] = Field(None, description="Lead AI engineer or contact point")
+    year: Optional[int] = Field(None, description="Delivery year (e.g. 2026)")
+    ai_techniques: List[str] = Field(default_factory=list, description="AI models, algorithms, and frameworks used")
+    tags: List[str] = Field(default_factory=list, description="Categorization tags and domain keywords")
+    lessons_learned: Optional[str] = Field(None, description="Practical advice, operational pitfalls, and key learnings")
+
+
+class HistoricProjectIngestResponse(BaseModel):
+    """Response payload after ingesting a project into the pgvector knowledge base."""
+
+    request_id: str = Field(..., description="Original submission UUID")
+    historic_id: str = Field(..., description="Generated historic project ID (e.g. HIST-2026-XXXX)")
+    project_name: str
+    status: str = "IMPLEMENTED"
+    embedding_dimension: int = 768
+    message: str = "Project successfully vectorized and ingested into knowledge base."
+
