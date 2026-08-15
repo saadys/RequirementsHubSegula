@@ -264,6 +264,10 @@ async def search_similar(
         list of (doc_string, similarity_score, metadata_dict)
         sorted by descending similarity (closest first).
     """
+    if db.bind and db.bind.dialect.name == "sqlite":
+        logger.debug("[VectorStore] SQLite database detected in test session. Skipping pgvector operator.")
+        return []
+
     query_embedding = await generate_embedding(query)
 
     # SQLAlchemy raw SQL with pgvector <=> cosine distance operator

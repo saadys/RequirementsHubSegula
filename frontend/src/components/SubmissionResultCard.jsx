@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -14,6 +14,7 @@ import {
   Sparkles,
   Layers
 } from 'lucide-react';
+import { fetchSubmissionById } from '../api/client';
 
 const PILLAR_CONFIG = [
   {
@@ -58,7 +59,31 @@ const PILLAR_CONFIG = [
   }
 ];
 
-export default function SubmissionResultCard({ result, onViewReport, onViewClarification, onReset }) {
+export default function SubmissionResultCard({ result: initialResult, onViewReport, onViewClarification, onReset }) {
+  const [result, setResult] = useState(initialResult);
+
+  useEffect(() => {
+    setResult(initialResult);
+  }, [initialResult]);
+
+  useEffect(() => {
+    if (
+      initialResult?.request_id &&
+      (initialResult.score === null ||
+        initialResult.score === undefined ||
+        ((initialResult.status === 'NEEDS_CLARIFICATION' || initialResult.decision === 'NEEDS_CLARIFICATION') &&
+          (!initialResult.clarification_questions || initialResult.clarification_questions.length === 0)))
+    ) {
+      fetchSubmissionById(initialResult.request_id)
+        .then((latest) => {
+          if (latest && (latest.score !== null || (latest.clarification_questions && latest.clarification_questions.length > 0))) {
+            setResult(latest);
+          }
+        })
+        .catch((err) => console.warn('Could not auto-refresh submission details:', err));
+    }
+  }, [initialResult?.request_id]);
+
   if (!result) return null;
 
   const status = result.status || 'PROCESSED';
@@ -75,13 +100,29 @@ export default function SubmissionResultCard({ result, onViewReport, onViewClari
   const vetoReasons = result.veto_reasons || result.breakdown?.veto_reasons || [];
   const pillarsMap = result.pillars || {};
 
+  // Clarification state
+  const roundNum = result.clarification_round || 0;
+  const maxRounds = result.max_rounds || 2;
+  const activeQuestions = result.clarification_questions || result.questions || [];
+  const hasActiveQuestions = activeQuestions.length > 0;
+  const hasReport = Boolean(result.report);
+  const isClarificationExhausted = Boolean(
+    (roundNum >= maxRounds && !hasActiveQuestions) ||
+    (!hasActiveQuestions && hasReport && (decision === 'NEEDS_CLARIFICATION' || status === 'NEEDS_CLARIFICATION' || status === 'COMPLETED'))
+  );
+
   // Badge mapping
   let badgeClass = 'badge-incomplete';
   let BadgeIcon = HelpCircle;
   let statusText = 'INCOMPLETE FORM';
   let badgeColor = '#A78BFA';
 
-  if (status === 'COMPLETED' || decision === 'GO') {
+  if (vetoTriggered || decision === 'NO_GO' || status === 'REJECTED') {
+    badgeClass = 'badge-no-go';
+    BadgeIcon = XCircle;
+    statusText = vetoTriggered ? 'CIRCUIT-BREAKER VETO (NO_GO)' : 'NOT RECOMMENDED (NO_GO)';
+    badgeColor = '#F87171';
+  } else if (decision === 'GO' || (status === 'COMPLETED' && decision !== 'NEEDS_CLARIFICATION')) {
     badgeClass = 'badge-go';
     BadgeIcon = CheckCircle2;
     statusText = 'APPROVED (GO)';
@@ -92,15 +133,17 @@ export default function SubmissionResultCard({ result, onViewReport, onViewClari
     statusText = 'FAST-TRACK SOLUTION MATCH';
     badgeColor = '#38BDF8';
   } else if (status === 'NEEDS_CLARIFICATION' || decision === 'NEEDS_CLARIFICATION') {
-    badgeClass = 'badge-clarification';
-    BadgeIcon = AlertTriangle;
-    statusText = 'NEEDS CLARIFICATION';
-    badgeColor = '#FBBF24';
-  } else if (status === 'REJECTED' || decision === 'NO_GO' || vetoTriggered) {
-    badgeClass = 'badge-no-go';
-    BadgeIcon = XCircle;
-    statusText = vetoTriggered ? 'CIRCUIT-BREAKER VETO (NO_GO)' : 'NOT RECOMMENDED (NO_GO)';
-    badgeColor = '#F87171';
+    if (isClarificationExhausted) {
+      badgeClass = 'badge-clarification';
+      BadgeIcon = CheckCircle2;
+      statusText = 'CLARIFICATION COMPLETE (EVALUATED)';
+      badgeColor = '#60A5FA';
+    } else {
+      badgeClass = 'badge-clarification';
+      BadgeIcon = AlertTriangle;
+      statusText = `NEEDS CLARIFICATION (ROUND ${roundNum || 1}/${maxRounds})`;
+      badgeColor = '#FBBF24';
+    }
   }
 
   const getPillarScore = (config) => {
@@ -286,17 +329,27 @@ export default function SubmissionResultCard({ result, onViewReport, onViewClari
         </div>
       )}
 
+      {/* Clarification rounds exhausted info alert */}
+      {isClarificationExhausted && hasReport && (decision === 'NEEDS_CLARIFICATION' || roundNum >= maxRounds) && (
+        <div style={{ background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.35)', padding: '14px 18px', borderRadius: '12px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <CheckCircle2 size={20} color="#60A5FA" style={{ flexShrink: 0 }} />
+          <div style={{ fontSize: '0.86rem', color: '#CBD5E1', lineHeight: 1.4 }}>
+            <strong style={{ color: '#93C5FD' }}>Clarification Rounds Completed ({roundNum || 2}/{maxRounds}):</strong> All clarification rounds have been answered and synthesized into your Feasibility Dossier. The report is available to view below and has been routed to the AI Engineering Lead for human-in-the-loop review.
+          </div>
+        </div>
+      )}
+
       {/* Action Buttons */}
       <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '24px' }}>
-        {(status === 'COMPLETED' || status === 'FAST_TRACK' || decision === 'GO' || result.report) && (
+        {(status === 'COMPLETED' || status === 'FAST_TRACK' || decision === 'GO' || hasReport) && (
           <button className="btn-primary" onClick={() => onViewReport(result.request_id)}>
             <FileText size={18} /> View Full Feasibility Dossier
           </button>
         )}
 
-        {(status === 'NEEDS_CLARIFICATION' || decision === 'NEEDS_CLARIFICATION') && (
+        {(status === 'NEEDS_CLARIFICATION' || decision === 'NEEDS_CLARIFICATION') && !isClarificationExhausted && (
           <button className="btn-primary" style={{ background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' }} onClick={() => onViewClarification(result.request_id)}>
-            <MessageSquareText size={18} /> Answer Clarification Questions ({result.clarification_questions?.length || 0})
+            <MessageSquareText size={18} /> Answer Clarification Questions {activeQuestions.length > 0 ? `(${activeQuestions.length})` : ''}
           </button>
         )}
 
