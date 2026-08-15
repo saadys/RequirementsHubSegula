@@ -181,6 +181,8 @@ class SubmissionResponse(BaseModel):
     report_type: Optional[str] = None
     missing_fields: List[str] = Field(default_factory=list)
     clarification_questions: List[Any] = Field(default_factory=list)
+    clarification_round: int = Field(0, description="Current clarification round number")
+    max_rounds: int = Field(MAX_CLARIFICATION_ROUNDS, description="Maximum allowed clarification rounds")
     parsed_files_text: List[str] = Field(default_factory=list)
     report: Optional[str] = None
     created_at: Optional[str] = None
