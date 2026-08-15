@@ -9,6 +9,42 @@ Owner: Track B / Shared Integration
 
 from backend.contracts.state import PipelineState
 from backend import config
+import json
+from backend.services.llm import get_llm
+
+
+def _generate_ai_feedback(decision: str, score: int, sub: dict, veto: list, facts: dict) -> str:
+    """Uses the LLM to generate dynamic, actionable feedback for rejected or stalled projects."""
+    llm = get_llm()
+    system_prompt = (
+        "You are a Senior AI Requirements Architect at Segula Technologies.\n"
+        "A business team submitted an AI project request that evaluated to 'NO_GO' "
+        "(rejected) or stalled in 'NEEDS_CLARIFICATION'. Your job is to provide constructive, "
+        "actionable, and empathetic feedback so they know exactly *why* it was not approved "
+        "and *exactly what steps* they can take to improve it (e.g., how to collect data, "
+        "how to define a measurable KPI, or stating if they don't need AI at all).\n"
+        "Be concise and professional. Format your response in clean Markdown (no top-level headings)."
+    )
+    
+    user_content = f"""
+Decision: {decision}
+Score: {score}/100
+Sub-Scores: {json.dumps(sub)}
+Veto Reasons: {json.dumps(veto)}
+Project Summary: {facts.get('project_summary', 'N/A')}
+
+Provide 1-2 paragraphs of actionable advice. Be precise about what they must fix (Data, Scope, Integration) for the next submission.
+"""
+    try:
+        return llm.generate_text(
+            prompt=user_content,
+            system_prompt=system_prompt,
+            temperature=0.7
+        ).strip()
+    except Exception as e:
+        import logging
+        logging.getLogger("backend.nodes.generate_report").error(f"Feedback generation failed: {e}")
+        return "Please review the 5-pillar breakdown and veto alerts above to address the bottlenecks in your project data or scope."
 
 
 def generate_report(state: PipelineState) -> dict:
@@ -100,6 +136,10 @@ def generate_report(state: PipelineState) -> dict:
 ### 💡 Recommended Next Steps:
 - **Technical Path:** {identified_technique}
 """
+
+    if decision in ["NO_GO", "NEEDS_CLARIFICATION"]:
+        feedback_text = _generate_ai_feedback(decision, score, sub, veto, facts)
+        report_markdown += f"\n---\n\n### 🧠 AI Architect Feedback & Actionable Next Steps:\n{feedback_text}\n"
 
     report_type = "go" if decision in ["GO", "FAST_TRACK"] else ("no_go" if decision == "NO_GO" else "partial")
 
