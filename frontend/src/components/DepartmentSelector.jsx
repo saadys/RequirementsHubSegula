@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Building2, Wrench, Car, Rocket, Zap, Lock } from 'lucide-react';
+import { Building2, Cpu, BarChart2, Wrench, Factory, Lock } from 'lucide-react';
 
 const DEPT_ICONS = {
   corporate_support: Building2,
-  manufacturing_engineering: Wrench,
-  automotive_software: Car,
-  aerospace_defence: Rocket,
-  energy_industry: Zap,
+  system_development: Cpu,
+  industrial_performance: BarChart2,
+  mechanical_engineering: Wrench,
+  manufacturing: Factory,
 };
 
 export default function DepartmentSelector({ departments, selectedDept, onSelectDept }) {
@@ -14,11 +14,11 @@ export default function DepartmentSelector({ departments, selectedDept, onSelect
 
   // Fallback defaults if departments API is loading
   const allDepts = departments && departments.length > 0 ? departments : [
-    { id: 'corporate_support', name: 'Corporate & Support Services', description: 'HR, IT, Legal, Finance, Knowledge Management', enabled: true },
-    { id: 'manufacturing_engineering', name: 'Manufacturing Engineering', description: 'Plant Automation, Robotics, Quality Control', enabled: false },
-    { id: 'automotive_software', name: 'Automotive Software', description: 'AUTOSAR, ECU, ADAS Validation', enabled: false },
-    { id: 'aerospace_defence', name: 'Aerospace & Defence', description: 'DO-178C, Avionics, Thermal Simulation', enabled: false },
-    { id: 'energy_industry', name: 'Energy & Industry', description: 'Grid Optimization, Asset Management', enabled: false },
+    { id: 'corporate_support', display_name: 'Corporate & Support Services', description: 'HR, IT, Internal Tools, Recruitment, Onboarding, Knowledge Management', enabled: true },
+    { id: 'system_development', display_name: 'System Development & Validation', description: 'Virtual Validation, Crash Simulation, Testing & Validation', enabled: false },
+    { id: 'industrial_performance', display_name: 'Industrial Performance & Data Management', description: 'Cost Engineering, Value Optimization, Supply Chain, Data Management', enabled: false },
+    { id: 'mechanical_engineering', display_name: 'Mechanical Engineering', description: 'Powertrain, Chassis, Interior, Exterior, Body', enabled: false },
+    { id: 'manufacturing', display_name: 'Manufacturing', description: 'Stamping, Welding, Assembly, Paint Shop, Metrology', enabled: false },
   ];
 
   return (

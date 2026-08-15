@@ -3,7 +3,7 @@
  * Connects frontend views to FastAPI backend endpoints at http://localhost:8000/api
  */
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 const ROOT_URL = BASE_URL.replace(/\/api\/?$/, '');
 
 async function request(endpoint, options = {}) {
@@ -39,7 +39,7 @@ async function request(endpoint, options = {}) {
 // Health Check
 // -------------------------------------------------------------
 export async function fetchHealth() {
-  const res = await fetch(`${ROOT_URL}/health`);
+  const res = await fetch(`${BASE_URL}/health`);
   return res.json();
 }
 
@@ -137,5 +137,12 @@ export async function overrideDecision(requestId, { decision, reviewer_notes, re
   return request(`/dashboard/${requestId}/decision`, {
     method: 'POST',
     body: JSON.stringify({ decision, reviewer_notes, reviewer_name }),
+  });
+}
+
+export async function ingestHistoricProject(requestId, projectData) {
+  return request(`/dashboard/${requestId}/ingest-historic`, {
+    method: 'POST',
+    body: JSON.stringify(projectData),
   });
 }

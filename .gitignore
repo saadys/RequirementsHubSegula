@@ -63,3 +63,10 @@ backend/create_tech_comparison_pdf.py
 tests/test_parse_input.py
 tests/test_validation.py
 *.pdf
+*.ipynb
+.agents/
+graphify-out/
+output.md
+logic_tests.md
+EVALUATION_LOGIC.md
+ingestion.md

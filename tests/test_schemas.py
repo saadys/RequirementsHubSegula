@@ -175,3 +175,128 @@ def test_clarification_schemas():
     )
     assert clarif_resp.clarification_round == 1
     assert clarif_resp.max_rounds == 2
+
+
+def test_5_pillar_categorical_fact_extraction():
+    """Test 5-pillar CategoricalFactExtraction and individual pillar schemas."""
+    from backend.schemas import (
+        CategoricalFactExtraction,
+        PillarAIViability,
+        PillarDataReadiness,
+        PillarGovernance,
+        PillarIntegration,
+        PillarProblemClarity,
+    )
+
+    data = {
+        "project_summary": "Automating invoice OCR and ERP line-item reconciliation.",
+        "identified_technique": "OCR + Fuzzy Matching",
+        "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "Standard NLP/OCR automation task."},
+        "data_readiness": {"category": "READY", "reason": "1,200 clean PDF invoices monthly."},
+        "problem_clarity": {"category": "CLEAR", "reason": "Clear inputs, outputs, and measurable KPIs."},
+        "integration_feasibility": {"category": "MODERATE", "reason": "Integrates with SAP ERP via standard table read."},
+        "governance_and_safety": {"category": "SAFE", "reason": "Internal accounting data with standard privacy controls."},
+    }
+
+    extraction = CategoricalFactExtraction(**data)
+    assert extraction.ai_viability.category == "HIGHLY_VIABLE"
+    assert extraction.data_readiness.category == "READY"
+    assert extraction.problem_clarity.category == "CLEAR"
+    assert extraction.integration_feasibility.category == "MODERATE"
+    assert extraction.governance_and_safety.category == "SAFE"
+    assert extraction.identified_technique == "OCR + Fuzzy Matching"
+
+    # Test invalid category throws validation error
+    invalid_data = data.copy()
+    invalid_data["ai_viability"] = {"category": "INVALID_CATEGORY", "reason": "Foo"}
+    with pytest.raises(ValidationError):
+        CategoricalFactExtraction(**invalid_data)
+
+
+def test_clarification_questions_model():
+    """Test ClarificationQuestionsModel and QuestionItem schemas."""
+    from backend.schemas import ClarificationQuestionsModel, QuestionItem
+
+    item = QuestionItem(
+        question="What is the expected daily invoice volume?",
+        target_pillar="data_readiness",
+        technical_reasoning="Needed to evaluate throughput requirements.",
+    )
+    assert item.target_pillar == "data_readiness"
+
+    model = ClarificationQuestionsModel(questions=[item])
+    assert len(model.questions) == 1
+    assert model.questions[0].question == "What is the expected daily invoice volume?"
+
+
+def test_pipeline_state_new_fields():
+    """Test PipelineState contains sub_scores, veto_reasons, and veto_triggered fields."""
+    from backend.contracts.state import PipelineState
+
+    state: PipelineState = {
+        "request_id": "test-req-123",
+        "score": 85,
+        "sub_scores": {"ai_viability": 30, "data_readiness": 25},
+        "veto_triggered": False,
+        "veto_reasons": [],
+        "decision": "GO",
+    }
+    assert state["sub_scores"]["ai_viability"] == 30
+    assert state["veto_triggered"] is False
+    assert state["veto_reasons"] == []
+
+
+def test_historic_project_ingest_schemas():
+    """Test HistoricProjectIngestInput and HistoricProjectIngestResponse schemas."""
+    from backend.schemas import (
+        HistoricProjectIngestInput,
+        HistoricProjectIngestResponse,
+        SubmissionStatus,
+    )
+
+    assert SubmissionStatus.IMPLEMENTED.value == "IMPLEMENTED"
+
+    valid_payload = {
+        "project_name": "Automated LiDAR Defect Detector",
+        "department": "automotive",
+        "problem_description": "Detect subtle micro-cracks in composite body panels in real-time.",
+        "solution_description": "Deployed YOLOv8 segmentation on NVIDIA Jetson with TensorRT acceleration.",
+        "outcome": "99.2% defect detection accuracy, reducing inspection time from 15 mins to 8 seconds.",
+        "contact_person": "Jane Doe (Lead AI Engineer)",
+        "year": 2026,
+        "ai_techniques": ["YOLOv8", "TensorRT", "Computer Vision"],
+        "tags": ["automotive", "quality_control", "edge_ai"],
+        "lessons_learned": "Camera calibration under industrial glare required polarized optical filters.",
+    }
+
+    ingest_input = HistoricProjectIngestInput(**valid_payload)
+    assert ingest_input.project_name == "Automated LiDAR Defect Detector"
+    assert ingest_input.department == "automotive"
+    assert len(ingest_input.ai_techniques) == 3
+    assert ingest_input.year == 2026
+
+    # Test missing required field raises ValidationError
+    invalid_payload = valid_payload.copy()
+    del invalid_payload["solution_description"]
+    with pytest.raises(ValidationError):
+        HistoricProjectIngestInput(**invalid_payload)
+
+    # Test short field fails min_length validation
+    invalid_short = valid_payload.copy()
+    invalid_short["outcome"] = "bad"  # < 5 chars
+    with pytest.raises(ValidationError):
+        HistoricProjectIngestInput(**invalid_short)
+
+    # Test response schema
+    response = HistoricProjectIngestResponse(
+        request_id="req-uuid-999",
+        historic_id="HIST-2026-0042",
+        project_name="Automated LiDAR Defect Detector",
+        status=SubmissionStatus.IMPLEMENTED.value,
+        embedding_dimension=768,
+    )
+    assert response.request_id == "req-uuid-999"
+    assert response.historic_id == "HIST-2026-0042"
+    assert response.status == "IMPLEMENTED"
+    assert response.embedding_dimension == 768
+

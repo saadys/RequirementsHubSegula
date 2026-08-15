@@ -12,6 +12,7 @@ from backend.config import MAX_CLARIFICATION_ROUNDS
 from backend.graph.builder import get_compiled_graph
 from backend.models.BaseDataModel import get_db
 from backend.models.ClarificationModel import ClarificationModel
+from backend.models.FactExtractionModel import FactExtractionModel
 from backend.models.ReportModel import ReportModel
 from backend.models.ScoringModel import ScoringModel
 from backend.models.SubmissionModel import SubmissionModel
@@ -32,6 +33,9 @@ def _determine_status(result_state: Dict[str, Any]) -> str:
     elif decision == Decision.NO_GO.value:
         return SubmissionStatus.REJECTED.value
     elif decision == Decision.NEEDS_CLARIFICATION.value:
+        # If report was generated (after max rounds exhausted), mark COMPLETED
+        if result_state.get("report"):
+            return SubmissionStatus.COMPLETED.value
         return SubmissionStatus.NEEDS_CLARIFICATION.value
     return SubmissionStatus.PROCESSED.value
 
@@ -53,18 +57,42 @@ async def get_clarification_questions(request_id: str, db: AsyncSession = Depend
 
     rounds = sub.clarification_rounds or []
     latest_round = rounds[-1] if rounds else None
+    round_num = latest_round.round_number if latest_round else 0
+    has_answered = bool(latest_round and latest_round.answers and len(latest_round.answers) > 0)
+    is_exhausted = (round_num >= MAX_CLARIFICATION_ROUNDS and has_answered) or (sub.report is not None and sub.status in ("COMPLETED", "REJECTED", "FAST_TRACK"))
+    
+    # Collect all historical answers across rounds
+    all_answers = []
+    for r in rounds:
+        if r.answers:
+            all_answers.extend(r.answers)
+
     overrides = sub.reviewer_overrides or []
-    decision = overrides[0].new_decision if overrides else (sub.scoring_result.decision if sub.scoring_result else None)
+    scoring = sub.scoring_result
+    decision = overrides[0].new_decision if overrides else (scoring.decision if scoring else None)
+
+    sub_scores = {}
+    veto_triggered = False
+    veto_reasons = []
+    if scoring and scoring.breakdown:
+        sub_scores = scoring.breakdown.get("sub_scores") or scoring.breakdown.get("pillar_scores") or {}
+        veto_triggered = bool(scoring.breakdown.get("veto_triggered", False))
+        veto_reasons = scoring.breakdown.get("veto_reasons") or []
+
+    active_questions = [] if (is_exhausted or has_answered) else (latest_round.questions if latest_round else [])
 
     return ClarificationResponse(
         request_id=str(sub.id),
         status=sub.status,
-        clarification_round=latest_round.round_number if latest_round else 0,
+        clarification_round=round_num,
         max_rounds=MAX_CLARIFICATION_ROUNDS,
-        questions=latest_round.questions if latest_round else [],
-        answers=latest_round.answers if latest_round else [],
-        score=sub.scoring_result.score if sub.scoring_result else None,
+        questions=active_questions,
+        answers=all_answers if all_answers else (latest_round.answers if latest_round else []),
+        score=scoring.score if scoring else None,
         decision=decision,
+        sub_scores=sub_scores,
+        veto_triggered=veto_triggered,
+        veto_reasons=veto_reasons,
         report_type=sub.report.report_type if sub.report else None,
         report=sub.report.content if sub.report else None,
     )
@@ -102,6 +130,12 @@ async def submit_clarification_answers(
     latest_round = rounds[-1] if rounds else None
     curr_round_num = latest_round.round_number if latest_round else 1
 
+    if latest_round and latest_round.round_number >= MAX_CLARIFICATION_ROUNDS and latest_round.answers:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Clarification rounds ({MAX_CLARIFICATION_ROUNDS}/{MAX_CLARIFICATION_ROUNDS}) have already been completed for this submission.",
+        )
+
     existing_answers = list(latest_round.answers) if (latest_round and latest_round.answers) else []
     existing_answers.extend(payload.answers)
 
@@ -133,20 +167,39 @@ async def submit_clarification_answers(
     }
 
     graph = get_compiled_graph()
-    updated_state = graph.invoke(state)
+    updated_state = await graph.ainvoke(state)
 
     status_str = _determine_status(updated_state)
     await sub_model.update_status(request_id, status_str)
 
+    if updated_state.get("extracted_facts"):
+        fact_model = FactExtractionModel(db)
+        await fact_model.create_or_update(
+            request_id,
+            updated_state.get("extracted_facts") or {},
+        )
+
     if updated_state.get("score") is not None or updated_state.get("decision"):
         scoring_model = ScoringModel(db)
+        sub_scores_val = updated_state.get("sub_scores") or {}
+        veto_trig = updated_state.get("veto_triggered", False)
+        veto_reasons_val = updated_state.get("veto_reasons") or []
+
+        breakdown_payload = {
+            "sub_scores": sub_scores_val,
+            "veto_triggered": veto_trig,
+            "veto_reasons": veto_reasons_val,
+        }
+        if updated_state.get("score_breakdown"):
+            breakdown_payload["legacy_breakdown"] = updated_state.get("score_breakdown")
+
         await scoring_model.create_or_update(
             request_id,
             {
                 "score": updated_state.get("score"),
                 "percentage": updated_state.get("score"),
                 "decision": updated_state.get("decision"),
-                "breakdown": updated_state.get("score_breakdown") or {},
+                "breakdown": breakdown_payload,
             },
         )
 
@@ -158,19 +211,52 @@ async def submit_clarification_answers(
             content=updated_state.get("report"),
         )
 
+    if updated_state.get("clarification_questions") and status_str == SubmissionStatus.NEEDS_CLARIFICATION.value:
+        next_round_num = curr_round_num + 1
+        if next_round_num <= MAX_CLARIFICATION_ROUNDS:
+            await clar_model.create_round(
+                submission_id=request_id,
+                round_number=next_round_num,
+                questions=updated_state.get("clarification_questions", []),
+                answers=[],
+            )
+
     refreshed_sub = await sub_model.get_by_id_with_relations(request_id)
     ref_rounds = refreshed_sub.clarification_rounds or []
     ref_latest = ref_rounds[-1] if ref_rounds else None
+    ref_round_num = ref_latest.round_number if ref_latest else curr_round_num
+    ref_scoring = refreshed_sub.scoring_result
+
+    # Collect all historical answers across rounds
+    all_answers = []
+    for r in ref_rounds:
+        if r.answers:
+            all_answers.extend(r.answers)
+
+    is_done = (ref_round_num >= MAX_CLARIFICATION_ROUNDS and bool(ref_latest and ref_latest.answers)) or (refreshed_sub.report is not None and refreshed_sub.status in ("COMPLETED", "REJECTED", "FAST_TRACK"))
+    active_questions = [] if is_done else (ref_latest.questions if (ref_latest and not ref_latest.answers) else [])
+
+    ref_sub_scores = {}
+    ref_veto_trig = False
+    ref_veto_reasons = []
+    if ref_scoring and ref_scoring.breakdown:
+        ref_sub_scores = ref_scoring.breakdown.get("sub_scores") or ref_scoring.breakdown.get("pillar_scores") or {}
+        ref_veto_trig = bool(ref_scoring.breakdown.get("veto_triggered", False))
+        ref_veto_reasons = ref_scoring.breakdown.get("veto_reasons") or []
 
     return ClarificationResponse(
         request_id=str(refreshed_sub.id),
         status=refreshed_sub.status,
-        clarification_round=ref_latest.round_number if ref_latest else curr_round_num,
+        clarification_round=ref_round_num,
         max_rounds=MAX_CLARIFICATION_ROUNDS,
-        questions=ref_latest.questions if ref_latest else [],
-        answers=ref_latest.answers if ref_latest else existing_answers,
-        score=refreshed_sub.scoring_result.score if refreshed_sub.scoring_result else None,
-        decision=refreshed_sub.scoring_result.decision if refreshed_sub.scoring_result else None,
+        questions=active_questions,
+        answers=all_answers if all_answers else (ref_latest.answers if ref_latest else existing_answers),
+        score=ref_scoring.score if ref_scoring else None,
+        decision=ref_scoring.decision if ref_scoring else None,
+        sub_scores=ref_sub_scores,
+        veto_triggered=ref_veto_trig,
+        veto_reasons=ref_veto_reasons,
         report_type=refreshed_sub.report.report_type if refreshed_sub.report else None,
         report=refreshed_sub.report.content if refreshed_sub.report else None,
     )
+

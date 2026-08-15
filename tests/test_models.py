@@ -116,6 +116,51 @@ async def test_fact_extraction_model_1to1_relationship(db_session: AsyncSession,
 
 
 @pytest.mark.asyncio
+async def test_fact_extraction_5_pillars_create_or_update(db_session: AsyncSession, seeded_department: Department):
+    """Test FactExtractionModel saving and updating 5-pillar structured facts."""
+    sub_model = SubmissionModel(db_client=db_session)
+    sub = await sub_model.create_submission(
+        Submission(
+            project_name="Supplier Invoice OCR",
+            department_id=seeded_department.id,
+            status="PENDING",
+        )
+    )
+
+    fact_model = FactExtractionModel(db_client=db_session)
+    pillar_data = {
+        "project_summary": "Accounts payable invoice reconciliation with SAP ERP.",
+        "identified_technique": "OCR + Fuzzy String Matching",
+        "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "Standard NLP/OCR extraction."},
+        "data_readiness": {"category": "READY", "reason": "1,200 PDF invoices monthly."},
+        "problem_clarity": {"category": "CLEAR", "reason": "Specific pain point and measurable KPI."},
+        "integration_feasibility": {"category": "MODERATE", "reason": "SAP ME23N table read."},
+        "governance_and_safety": {"category": "SAFE", "reason": "Standard VAT and vendor data."},
+    }
+
+    saved = await fact_model.create_or_update(sub.id, pillar_data)
+    assert saved.submission_id == sub.id
+    assert saved.ai_viability_category == "HIGHLY_VIABLE"
+    assert saved.data_readiness_category == "READY"
+    assert saved.problem_clarity_category == "CLEAR"
+    assert saved.integration_category == "MODERATE"
+    assert saved.governance_category == "SAFE"
+    assert saved.identified_technique == "OCR + Fuzzy String Matching"
+    assert saved.project_summary == "Accounts payable invoice reconciliation with SAP ERP."
+    assert saved.raw_extraction["identified_technique"] == "OCR + Fuzzy String Matching"
+
+    # Test idempotency / update
+    updated_data = pillar_data.copy()
+    updated_data["identified_technique"] = "OCR + Hybrid Vector Search"
+    updated_data["ai_viability"] = {"category": "HIGHLY_VIABLE", "reason": "Enhanced with vector matching."}
+    
+    updated = await fact_model.create_or_update(sub.id, updated_data)
+    assert updated.id == saved.id
+    assert updated.identified_technique == "OCR + Hybrid Vector Search"
+    assert updated.ai_viability_reason == "Enhanced with vector matching."
+
+
+@pytest.mark.asyncio
 async def test_scoring_model_and_breakdown(db_session: AsyncSession, seeded_department: Department):
     """Test ScoringModel creation and feasibility breakdown dict storage."""
     sub_model = SubmissionModel(db_client=db_session)

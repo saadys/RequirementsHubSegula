@@ -11,7 +11,91 @@ from backend.config import MAX_CLARIFICATION_ROUNDS
 from .Enums import Decision, SubmissionStatus
 
 
-# ── LLM Extraction Schema ────────────────────────────────────────────
+# ── 5-Pillar Categorical Extraction Schemas ───────────────────────────
+
+class PillarAIViability(BaseModel):
+    category: Literal["HIGHLY_VIABLE", "MARGINAL", "NOT_AI", "IMPOSSIBLE"] = Field(
+        ...,
+        description=(
+            "HIGHLY_VIABLE: Clear ML/NLP/CV automation.\n"
+            "MARGINAL: Commodity task where standard commercial API or existing software is better.\n"
+            "NOT_AI: Solvable with Python script, SQL query, cron job, or hardware cooling/replacement.\n"
+            "IMPOSSIBLE: Defies physics, math, or causality (e.g. 100% lottery prediction, sentient AGI)."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences technical justification.")
+
+
+class PillarDataReadiness(BaseModel):
+    category: Literal["READY", "UNLABELED_OR_MESSY", "NONE"] = Field(
+        ...,
+        description=(
+            "READY: Structured, labeled, accessible data (SQL, clean PDFs, annotated images).\n"
+            "UNLABELED_OR_MESSY: Raw data exists in bulk but lacks annotations/labels.\n"
+            "NONE: No data exists yet or it is scattered on personal laptops without access."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences data readiness assessment.")
+
+
+class PillarProblemClarity(BaseModel):
+    category: Literal["CLEAR", "PARTIAL", "CONTRADICTORY", "VAGUE"] = Field(
+        ...,
+        description=(
+            "CLEAR: Concrete workflow, defined inputs/outputs, and measurable KPIs.\n"
+            "PARTIAL: Clear intent but missing volume, format, or success threshold.\n"
+            "CONTRADICTORY: Contains mutually exclusive requirements (e.g. 100% autonomous with 100% human approval).\n"
+            "VAGUE: Pure buzzwords with no concrete business process."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences problem clarity assessment.")
+
+
+class PillarIntegration(BaseModel):
+    category: Literal["SIMPLE", "MODERATE", "COMPLEX"] = Field(
+        ...,
+        description=(
+            "SIMPLE: Standalone UI, batch file export, or clean REST API.\n"
+            "MODERATE: Standard enterprise systems (SharePoint, Jira, modern ERP).\n"
+            "COMPLEX: Legacy SAP write permissions, real-time robotics, or hard infra dependencies."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences integration assessment.")
+
+
+class PillarGovernance(BaseModel):
+    category: Literal["SAFE", "MODERATE_RISK", "CRITICAL_RISK"] = Field(
+        ...,
+        description=(
+            "SAFE: Standard internal business data with no compliance/privacy issues.\n"
+            "MODERATE_RISK: Needs privacy review, GDPR consent, or human oversight.\n"
+            "CRITICAL_RISK: Phishing tool, credential harvesting, unauthorized employee surveillance, illegal intent."
+        )
+    )
+    reason: str = Field(..., description="1-2 sentences governance and compliance assessment.")
+
+
+class CategoricalFactExtraction(BaseModel):
+    project_summary: str = Field(..., description="2-3 sentences concise technical summary of the submission.")
+    identified_technique: str = Field(..., description="Recommended technical approach (e.g., 'OCR + Fuzzy Matching', 'RAG', 'Standard Python ETL Script').")
+    ai_viability: PillarAIViability
+    data_readiness: PillarDataReadiness
+    problem_clarity: PillarProblemClarity
+    integration_feasibility: PillarIntegration
+    governance_and_safety: PillarGovernance
+
+
+class QuestionItem(BaseModel):
+    question: str
+    target_pillar: str
+    technical_reasoning: str
+
+
+class ClarificationQuestionsModel(BaseModel):
+    questions: List[QuestionItem] = Field(default_factory=list, max_length=4)
+
+
+# ── LLM Extraction Schema (Legacy Compatibility) ─────────────────────
 
 class FactExtraction(BaseModel):
     """Structured facts extracted by LLM from business requests."""
@@ -91,9 +175,14 @@ class SubmissionResponse(BaseModel):
     status: str
     decision: Optional[str] = None
     score: Optional[int] = None
+    sub_scores: Dict[str, int] = Field(default_factory=dict, description="5-pillar sub-scores")
+    veto_triggered: bool = Field(default=False, description="Whether a circuit breaker veto was triggered")
+    veto_reasons: List[str] = Field(default_factory=list, description="Veto reasons if triggered")
     report_type: Optional[str] = None
     missing_fields: List[str] = Field(default_factory=list)
-    clarification_questions: List[str] = Field(default_factory=list)
+    clarification_questions: List[Any] = Field(default_factory=list)
+    clarification_round: int = Field(0, description="Current clarification round number")
+    max_rounds: int = Field(MAX_CLARIFICATION_ROUNDS, description="Maximum allowed clarification rounds")
     parsed_files_text: List[str] = Field(default_factory=list)
     report: Optional[str] = None
     created_at: Optional[str] = None
@@ -145,7 +234,22 @@ class ReportResponse(BaseModel):
         None, description="Full Markdown content of the report"
     )
     decision: Optional[str] = Field(
-        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION"
+        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION, FAST_TRACK"
+    )
+    score: Optional[int] = Field(
+        None, description="Feasibility score (0-100)"
+    )
+    sub_scores: Dict[str, int] = Field(
+        default_factory=dict,
+        description="5-pillar sub-score breakdown",
+    )
+    veto_triggered: bool = Field(
+        default=False,
+        description="Whether a circuit-breaker veto was triggered",
+    )
+    veto_reasons: List[str] = Field(
+        default_factory=list,
+        description="List of circuit-breaker veto reasons",
     )
     is_available: bool = Field(
         False, description="Whether the report has been generated and is ready for download"
@@ -163,11 +267,27 @@ class ScoreResponse(BaseModel):
         None, description="Overall score percentage"
     )
     decision: Optional[str] = Field(
-        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION"
+        None, description="Pipeline routing decision: GO, NO_GO, NEEDS_CLARIFICATION, FAST_TRACK"
+    )
+    sub_scores: Dict[str, int] = Field(
+        default_factory=dict,
+        description="5-pillar sub-scores (ai_viability, data_readiness, problem_clarity, integration, governance)",
+    )
+    veto_triggered: bool = Field(
+        default=False,
+        description="Whether a circuit-breaker veto was triggered",
+    )
+    veto_reasons: List[str] = Field(
+        default_factory=list,
+        description="List of circuit-breaker veto reasons",
     )
     breakdown: Dict[str, Any] = Field(
         default_factory=dict,
-        description="7-criterion score breakdown dict detailing criteria points and maximums",
+        description="Score breakdown dict detailing criteria points or sub-scores",
+    )
+    pillars: Optional[Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Categorical breakdown per pillar if available",
     )
 
 
@@ -210,10 +330,13 @@ class ClarificationResponse(BaseModel):
     status: str
     clarification_round: int
     max_rounds: int = MAX_CLARIFICATION_ROUNDS
-    questions: List[str] = Field(default_factory=list)
+    questions: List[Any] = Field(default_factory=list)
     answers: List[str] = Field(default_factory=list)
     score: Optional[int] = None
     decision: Optional[str] = None
+    sub_scores: Dict[str, int] = Field(default_factory=dict)
+    veto_triggered: bool = Field(default=False)
+    veto_reasons: List[str] = Field(default_factory=list)
     report_type: Optional[str] = None
     report: Optional[str] = None
 
@@ -258,8 +381,43 @@ class PendingSubmissionItem(BaseModel):
     status: str
     decision: Optional[str] = None
     score: Optional[int] = None
+    sub_scores: Dict[str, int] = Field(default_factory=dict)
+    veto_triggered: bool = False
+    veto_reasons: List[str] = Field(default_factory=list)
+    ai_viability_category: Optional[str] = None
+    data_readiness_category: Optional[str] = None
+    problem_clarity_category: Optional[str] = None
+    integration_category: Optional[str] = None
+    governance_category: Optional[str] = None
     clarification_round: int = 0
     created_at: Optional[str] = None
     missing_fields: List[str] = Field(default_factory=list)
     has_report: bool = False
     report_type: Optional[str] = None
+
+
+class HistoricProjectIngestInput(BaseModel):
+    """Payload for ingesting a successfully delivered project into the historic vector knowledge base."""
+
+    project_name: str = Field(..., min_length=2, description="Name of the delivered AI project")
+    department: str = Field(..., min_length=2, description="Originating department or business unit")
+    problem_description: str = Field(..., min_length=10, description="Detailed problem statement and initial requirements")
+    solution_description: str = Field(..., min_length=10, description="Real-world delivered AI architecture and methodology")
+    outcome: str = Field(..., min_length=5, description="Actual achieved metric, ROI, accuracy, or business outcome")
+    contact_person: Optional[str] = Field(None, description="Lead AI engineer or contact point")
+    year: Optional[int] = Field(None, description="Delivery year (e.g. 2026)")
+    ai_techniques: List[str] = Field(default_factory=list, description="AI models, algorithms, and frameworks used")
+    tags: List[str] = Field(default_factory=list, description="Categorization tags and domain keywords")
+    lessons_learned: Optional[str] = Field(None, description="Practical advice, operational pitfalls, and key learnings")
+
+
+class HistoricProjectIngestResponse(BaseModel):
+    """Response payload after ingesting a project into the pgvector knowledge base."""
+
+    request_id: str = Field(..., description="Original submission UUID")
+    historic_id: str = Field(..., description="Generated historic project ID (e.g. HIST-2026-XXXX)")
+    project_name: str
+    status: str = "IMPLEMENTED"
+    embedding_dimension: int = 768
+    message: str = "Project successfully vectorized and ingested into knowledge base."
+

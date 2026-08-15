@@ -395,6 +395,36 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
                       </label>
                     </div>
                   );
+                } else if (field.type === 'text' || field.type === 'string') {
+                  return (
+                    <div key={field.name}>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', marginBottom: '4px' }}>
+                        {field.label} {field.required && '*'}
+                      </label>
+                      <input
+                        type="text"
+                        className="glass-input"
+                        value={val}
+                        onChange={(e) => handleDeptSpecificChange(field.name, e.target.value)}
+                        required={field.required}
+                      />
+                    </div>
+                  );
+                } else if (field.type === 'number') {
+                  return (
+                    <div key={field.name}>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#94A3B8', marginBottom: '4px' }}>
+                        {field.label} {field.required && '*'}
+                      </label>
+                      <input
+                        type="number"
+                        className="glass-input"
+                        value={val}
+                        onChange={(e) => handleDeptSpecificChange(field.name, e.target.value)}
+                        required={field.required}
+                      />
+                    </div>
+                  );
                 }
                 return null;
               })}
