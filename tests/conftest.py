@@ -21,6 +21,7 @@ import pytest_asyncio
 from typing import AsyncGenerator
 from httpx import AsyncClient, ASGITransport
 
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from backend.models.db_schemes.requirementshub.schemes.base import Base
 from backend.models.db_schemes.requirementshub.schemes import (
@@ -42,8 +43,13 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 @pytest_asyncio.fixture(scope="function")
 async def test_engine():
-    """Create in-memory SQLite engine and initialize tables."""
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    """Create in-memory SQLite engine with StaticPool and initialize tables."""
+    engine = create_async_engine(
+        TEST_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=False,
+    )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine
@@ -59,8 +65,13 @@ async def db_session(test_engine, monkeypatch) -> AsyncGenerator[AsyncSession, N
         bind=test_engine, class_=AsyncSession, expire_on_commit=False
     )
     import sys
-    base_module = sys.modules["backend.models.BaseDataModel"]
-    monkeypatch.setattr(base_module, "AsyncSessionLocal", session_factory)
+    base_module = sys.modules.get("backend.models.BaseDataModel")
+    if base_module:
+        monkeypatch.setattr(base_module, "AsyncSessionLocal", session_factory)
+        monkeypatch.setattr(base_module, "engine", test_engine)
+    rag_module = sys.modules.get("backend.nodes.rag_search")
+    if rag_module:
+        monkeypatch.setattr(rag_module, "AsyncSessionLocal", session_factory)
     async with session_factory() as session:
         yield session
 
@@ -72,8 +83,13 @@ async def async_client(db_session: AsyncSession, test_engine, monkeypatch) -> As
         bind=test_engine, class_=AsyncSession, expire_on_commit=False
     )
     import sys
-    base_module = sys.modules["backend.models.BaseDataModel"]
-    monkeypatch.setattr(base_module, "AsyncSessionLocal", session_factory)
+    base_module = sys.modules.get("backend.models.BaseDataModel")
+    if base_module:
+        monkeypatch.setattr(base_module, "AsyncSessionLocal", session_factory)
+        monkeypatch.setattr(base_module, "engine", test_engine)
+    rag_module = sys.modules.get("backend.nodes.rag_search")
+    if rag_module:
+        monkeypatch.setattr(rag_module, "AsyncSessionLocal", session_factory)
 
     async def override_get_db():
         yield db_session

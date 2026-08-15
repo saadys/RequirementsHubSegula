@@ -38,7 +38,10 @@ class PipelineState(TypedDict, total=False):
 
     # ── Scoring (Track B writes, report reads) ───────────────────
     score: int                               # 0-100
-    score_breakdown: dict                    # Per-criterion scores
+    score_breakdown: dict                    # Per-criterion / Per-pillar scores
+    sub_scores: dict                         # 5-Pillar scores {"ai_viability": x, ...}
+    veto_triggered: bool                     # Whether circuit breaker veto fired
+    veto_reasons: list[str]                  # List of active veto reasons
     decision: str                            # "GO" | "NO_GO" | "NEEDS_CLARIFICATION"
 
     # ── Output (Track B writes) ──────────────────────────────────

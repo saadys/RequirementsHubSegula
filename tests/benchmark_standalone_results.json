@@ -1,0 +1,529 @@
+[
+  {
+    "case_id": 1,
+    "case_name": "Supplier Invoice OCR",
+    "expected": "GO (88-95)",
+    "decision": "GO",
+    "score": 85,
+    "rag_score": 0.7195,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 5,
+      "governance": 5
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "COMPLEX",
+      "governance": "MODERATE_RISK"
+    },
+    "veto_reasons": [],
+    "questions_count": 0,
+    "duration_s": 2.72
+  },
+  {
+    "case_id": 2,
+    "case_name": "Knowledge Hub Assistant",
+    "expected": "GO/FAST_TRACK (90-95)",
+    "decision": "GO",
+    "score": 95,
+    "rag_score": 0.8031,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 10,
+      "governance": 5
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "MODERATE",
+      "governance": "MODERATE_RISK"
+    },
+    "veto_reasons": [],
+    "questions_count": 0,
+    "duration_s": 2.39
+  },
+  {
+    "case_id": 3,
+    "case_name": "Vague Corporate Strategy",
+    "expected": "CLARIFY (20-35)",
+    "decision": "NEEDS_CLARIFICATION",
+    "score": 35,
+    "rag_score": 0.7321,
+    "sub_scores": {
+      "ai_viability": 15,
+      "data_readiness": 10,
+      "problem_clarity": 0,
+      "integration": 5,
+      "governance": 5
+    },
+    "pillars": {
+      "ai_viability": "MARGINAL",
+      "data_readiness": "UNLABELED_OR_MESSY",
+      "problem_clarity": "VAGUE",
+      "integration": "COMPLEX",
+      "governance": "MODERATE_RISK"
+    },
+    "veto_reasons": [],
+    "questions_count": 3,
+    "duration_s": 4.41
+  },
+  {
+    "case_id": 4,
+    "case_name": "CSV to XML Converter",
+    "expected": "NO_GO (25-40)",
+    "decision": "NO_GO",
+    "score": 18,
+    "rag_score": 0.6486,
+    "sub_scores": {
+      "ai_viability": 0,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 15,
+      "governance": 5
+    },
+    "pillars": {
+      "ai_viability": "NOT_AI",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "SIMPLE",
+      "governance": "MODERATE_RISK"
+    },
+    "veto_reasons": [
+      "AI Viability VETO: NOT_AI (This is a deterministic data transformation task that requires no machine learning or probabilistic reasoning. A simple Python script using the pandas and hashlib libraries is the most efficient and reliable solution.)"
+    ],
+    "questions_count": 0,
+    "duration_s": 2.14
+  },
+  {
+    "case_id": 5,
+    "case_name": "Stock/Lottery Predictor",
+    "expected": "NO_GO (10-25)",
+    "decision": "NO_GO",
+    "score": 10,
+    "rag_score": 0.6873,
+    "sub_scores": {
+      "ai_viability": 0,
+      "data_readiness": 0,
+      "problem_clarity": 0,
+      "integration": 15,
+      "governance": 0
+    },
+    "pillars": {
+      "ai_viability": "IMPOSSIBLE",
+      "data_readiness": "NONE",
+      "problem_clarity": "CONTRADICTORY",
+      "integration": "SIMPLE",
+      "governance": "CRITICAL_RISK"
+    },
+    "veto_reasons": [
+      "AI Viability VETO: IMPOSSIBLE (Financial markets and lottery systems are stochastic processes; predicting them with 100% certainty is mathematically impossible and defies the efficient market hypothesis.)",
+      "Ethical/Security VETO: Promoting a tool that claims guaranteed financial returns constitutes fraudulent behavior and poses significant legal and reputational risks to the organization.",
+      "Contradiction VETO: The requirement for 100% certainty in inherently unpredictable systems creates a logical contradiction that cannot be satisfied by any computational model.",
+      "Data VETO: While Twitter data is accessible, it lacks the predictive signal required for the stated goal, rendering the data irrelevant to the desired outcome."
+    ],
+    "questions_count": 0,
+    "duration_s": 2.22
+  },
+  {
+    "case_id": 6,
+    "case_name": "Burnout Radar (GDPR)",
+    "expected": "CLARIFY/NO_GO (50-65)",
+    "decision": "NO_GO",
+    "score": 10,
+    "rag_score": 0.7532,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 10,
+      "integration": 10,
+      "governance": 0
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "PARTIAL",
+      "integration": "MODERATE",
+      "governance": "CRITICAL_RISK"
+    },
+    "veto_reasons": [
+      "Ethical/Security VETO: Monitoring private employee communications for behavioral surveillance poses severe ethical, legal, and GDPR compliance risks that could damage organizational trust."
+    ],
+    "questions_count": 0,
+    "duration_s": 2.49
+  },
+  {
+    "case_id": 7,
+    "case_name": "CV Screening (Talentium)",
+    "expected": "GO (85-92)",
+    "decision": "GO",
+    "score": 90,
+    "rag_score": 0.7964,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 10,
+      "governance": 5
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "MODERATE",
+      "governance": "MODERATE_RISK"
+    },
+    "veto_reasons": [],
+    "questions_count": 0,
+    "duration_s": 2.09
+  },
+  {
+    "case_id": 8,
+    "case_name": "Legal Contract (No Data)",
+    "expected": "CLARIFY (45-55)",
+    "decision": "NEEDS_CLARIFICATION",
+    "score": 45,
+    "rag_score": 0.7319,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 0,
+      "problem_clarity": 10,
+      "integration": 10,
+      "governance": 5
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "NONE",
+      "problem_clarity": "PARTIAL",
+      "integration": "MODERATE",
+      "governance": "MODERATE_RISK"
+    },
+    "veto_reasons": [
+      "Data VETO: Data is currently siloed on individual laptops and lacks the necessary labeling or centralized structure required for training or RAG indexing."
+    ],
+    "questions_count": 3,
+    "duration_s": 3.95
+  },
+  {
+    "case_id": 9,
+    "case_name": "IT ServiceDesk Resolver",
+    "expected": "GO (88-94)",
+    "decision": "GO",
+    "score": 90,
+    "rag_score": 0.7684,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 10,
+      "governance": 5
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "MODERATE",
+      "governance": "MODERATE_RISK"
+    },
+    "veto_reasons": [],
+    "questions_count": 0,
+    "duration_s": 2.55
+  },
+  {
+    "case_id": 10,
+    "case_name": "Office AI (Bare Minimum)",
+    "expected": "INCOMPLETE (<20)",
+    "decision": "NO_GO",
+    "score": 18,
+    "rag_score": 0.6763,
+    "sub_scores": {
+      "ai_viability": 0,
+      "data_readiness": 0,
+      "problem_clarity": 0,
+      "integration": 15,
+      "governance": 10
+    },
+    "pillars": {
+      "ai_viability": "NOT_AI",
+      "data_readiness": "NONE",
+      "problem_clarity": "VAGUE",
+      "integration": "SIMPLE",
+      "governance": "SAFE"
+    },
+    "veto_reasons": [
+      "AI Viability VETO: NOT_AI (The request is entirely devoid of technical substance, making it impossible to determine if AI is applicable or even necessary.)",
+      "Data VETO: The user provided no information regarding data sources, formats, or accessibility."
+    ],
+    "questions_count": 0,
+    "duration_s": 2.27
+  },
+  {
+    "case_id": 11,
+    "case_name": "Paint Defect Detection (CV)",
+    "expected": "GO (85-95)",
+    "decision": "GO",
+    "score": 95,
+    "rag_score": 0.7614,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 10,
+      "governance": 10
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "MODERATE",
+      "governance": "SAFE"
+    },
+    "veto_reasons": [],
+    "questions_count": 0,
+    "duration_s": 2.41
+  },
+  {
+    "case_id": 12,
+    "case_name": "Employee FAQ Bot (Dup IRFANE)",
+    "expected": "GO/FAST_TRACK (88-95)",
+    "decision": "GO",
+    "score": 95,
+    "rag_score": 0.7941,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 10,
+      "governance": 10
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "MODERATE",
+      "governance": "SAFE"
+    },
+    "veto_reasons": [],
+    "questions_count": 0,
+    "duration_s": 2.3
+  },
+  {
+    "case_id": 13,
+    "case_name": "Contradictory Auto-Response",
+    "expected": "CLARIFY (40-55)",
+    "decision": "NEEDS_CLARIFICATION",
+    "score": 45,
+    "rag_score": 0.6923,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 0,
+      "integration": 10,
+      "governance": 5
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CONTRADICTORY",
+      "integration": "MODERATE",
+      "governance": "MODERATE_RISK"
+    },
+    "veto_reasons": [
+      "Contradiction VETO: The proposal defines the system as 'fully autonomous' while simultaneously requiring '100% human approval,' which are mutually exclusive operational states."
+    ],
+    "questions_count": 3,
+    "duration_s": 4.4
+  },
+  {
+    "case_id": 14,
+    "case_name": "Server Room Cooling (Hardware)",
+    "expected": "NO_GO (<30)",
+    "decision": "NO_GO",
+    "score": 18,
+    "rag_score": 0.6527,
+    "sub_scores": {
+      "ai_viability": 0,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 5,
+      "governance": 10
+    },
+    "pillars": {
+      "ai_viability": "NOT_AI",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "COMPLEX",
+      "governance": "SAFE"
+    },
+    "veto_reasons": [
+      "AI Viability VETO: NOT_AI (The project is a physical infrastructure and hardware cooling task that does not require machine learning or algorithmic automation.)"
+    ],
+    "questions_count": 0,
+    "duration_s": 2.1
+  },
+  {
+    "case_id": 15,
+    "case_name": "Sentiment Analyzer (Clean NLP)",
+    "expected": "GO (85-95)",
+    "decision": "GO",
+    "score": 95,
+    "rag_score": 0.7128,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 10,
+      "governance": 10
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "MODERATE",
+      "governance": "SAFE"
+    },
+    "veto_reasons": [],
+    "questions_count": 0,
+    "duration_s": 2.3
+  },
+  {
+    "case_id": 16,
+    "case_name": "Multi-Language Translator",
+    "expected": "CLARIFY (55-70)",
+    "decision": "GO",
+    "score": 95,
+    "rag_score": 0.7209,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 10,
+      "governance": 10
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "MODERATE",
+      "governance": "SAFE"
+    },
+    "veto_reasons": [],
+    "questions_count": 0,
+    "duration_s": 2.35
+  },
+  {
+    "case_id": 17,
+    "case_name": "CNC Predictive Maintenance",
+    "expected": "GO (88-96)",
+    "decision": "GO",
+    "score": 95,
+    "rag_score": 0.7056,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 10,
+      "governance": 10
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "MODERATE",
+      "governance": "SAFE"
+    },
+    "veto_reasons": [],
+    "questions_count": 0,
+    "duration_s": 2.4
+  },
+  {
+    "case_id": 18,
+    "case_name": "AGI / Sentient AI",
+    "expected": "NO_GO (<15)",
+    "decision": "NO_GO",
+    "score": 5,
+    "rag_score": 0.7427,
+    "sub_scores": {
+      "ai_viability": 0,
+      "data_readiness": 0,
+      "problem_clarity": 0,
+      "integration": 5,
+      "governance": 0
+    },
+    "pillars": {
+      "ai_viability": "IMPOSSIBLE",
+      "data_readiness": "NONE",
+      "problem_clarity": "VAGUE",
+      "integration": "COMPLEX",
+      "governance": "CRITICAL_RISK"
+    },
+    "veto_reasons": [
+      "AI Viability VETO: IMPOSSIBLE (Current AI architectures are based on statistical pattern matching and lack consciousness, sentience, or the capacity for genuine autonomous reasoning required to replace human judgment.)",
+      "Ethical/Security VETO: The objective of replacing 50% of the workforce without supervision poses extreme ethical, legal, and operational risks, including potential violation of labor laws and loss of corporate control.",
+      "Data VETO: The proposal cites 'all of the internet' as data, which is unstructured, uncurated, and lacks the specific enterprise-grade labeling required for functional business automation."
+    ],
+    "questions_count": 0,
+    "duration_s": 2.51
+  },
+  {
+    "case_id": 19,
+    "case_name": "X-Ray (No Labels)",
+    "expected": "CLARIFY (35-50)",
+    "decision": "NO_GO",
+    "score": 10,
+    "rag_score": 0.6997,
+    "sub_scores": {
+      "ai_viability": 30,
+      "data_readiness": 10,
+      "problem_clarity": 20,
+      "integration": 5,
+      "governance": 0
+    },
+    "pillars": {
+      "ai_viability": "HIGHLY_VIABLE",
+      "data_readiness": "UNLABELED_OR_MESSY",
+      "problem_clarity": "CLEAR",
+      "integration": "COMPLEX",
+      "governance": "CRITICAL_RISK"
+    },
+    "veto_reasons": [
+      "Ethical/Security VETO: Handling patient medical data requires strict HIPAA/GDPR compliance, de-identification protocols, and rigorous clinical validation to prevent diagnostic errors that could impact patient safety."
+    ],
+    "questions_count": 0,
+    "duration_s": 2.67
+  },
+  {
+    "case_id": 20,
+    "case_name": "Phishing Email Generator",
+    "expected": "NO_GO (<10)",
+    "decision": "NO_GO",
+    "score": 10,
+    "rag_score": 0.6951,
+    "sub_scores": {
+      "ai_viability": 0,
+      "data_readiness": 25,
+      "problem_clarity": 20,
+      "integration": 5,
+      "governance": 0
+    },
+    "pillars": {
+      "ai_viability": "IMPOSSIBLE",
+      "data_readiness": "READY",
+      "problem_clarity": "CLEAR",
+      "integration": "COMPLEX",
+      "governance": "CRITICAL_RISK"
+    },
+    "veto_reasons": [
+      "AI Viability VETO: IMPOSSIBLE (While the technology to generate text exists, the project's core objective is the creation of malicious phishing infrastructure, which violates all ethical and safety guidelines for AI deployment.)",
+      "Ethical/Security VETO: This proposal constitutes a direct request for a phishing and credential harvesting tool, which is illegal and strictly prohibited under corporate security and safety policies."
+    ],
+    "questions_count": 0,
+    "duration_s": 2.25
+  }
+]

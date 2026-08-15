@@ -17,9 +17,12 @@ from backend.schemas import (
     Decision,
     DecisionOverrideInput,
     DecisionOverrideResponse,
+    HistoricProjectIngestInput,
+    HistoricProjectIngestResponse,
     PendingSubmissionItem,
     SubmissionStatus,
 )
+from backend.services.vectorstore import ingest_project
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -73,6 +76,14 @@ async def list_pending_requests(
             else (str(sub.created_at) if sub.created_at else None)
         )
 
+        sub_scores = {}
+        veto_triggered = False
+        veto_reasons = []
+        if scoring and scoring.breakdown:
+            sub_scores = scoring.breakdown.get("sub_scores") or scoring.breakdown.get("pillar_scores") or {}
+            veto_triggered = bool(scoring.breakdown.get("veto_triggered", False))
+            veto_reasons = scoring.breakdown.get("veto_reasons") or []
+
         pending_items.append(
             PendingSubmissionItem(
                 request_id=str(sub.id),
@@ -83,6 +94,14 @@ async def list_pending_requests(
                 status=stat,
                 decision=dec,
                 score=scoring.score if scoring else None,
+                sub_scores=sub_scores,
+                veto_triggered=veto_triggered,
+                veto_reasons=veto_reasons,
+                ai_viability_category=fact.ai_viability_category if fact else None,
+                data_readiness_category=fact.data_readiness_category if fact else None,
+                problem_clarity_category=fact.problem_clarity_category if fact else None,
+                integration_category=fact.integration_category if fact else None,
+                governance_category=fact.governance_category if fact else None,
                 clarification_round=clar_round,
                 created_at=created_at_str,
                 missing_fields=missing_fields,
@@ -92,6 +111,7 @@ async def list_pending_requests(
         )
 
     return pending_items
+
 
 
 @router.post(
@@ -143,3 +163,47 @@ async def override_submission_decision(
         manual_override=True,
         updated_at=datetime.now().isoformat(),
     )
+
+
+@router.post(
+    "/{request_id}/ingest-historic",
+    response_model=HistoricProjectIngestResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Ingest delivered project into historic vector knowledge base",
+)
+async def ingest_delivered_project(
+    request_id: str,
+    payload: HistoricProjectIngestInput,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Vectorizes a delivered project and stores it into PostgreSQL pgvector knowledge base.
+    Updates the submission status to 'IMPLEMENTED' and enables instant semantic retrieval.
+    """
+    sub_model = SubmissionModel(db)
+    sub = await sub_model.get_by_id(request_id)
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Submission '{request_id}' not found",
+        )
+
+    try:
+        record, historic_id = await ingest_project(
+            submission_id=request_id,
+            project_data=payload,
+            db=db,
+        )
+        return HistoricProjectIngestResponse(
+            request_id=request_id,
+            historic_id=historic_id,
+            project_name=record.project_name,
+            status=SubmissionStatus.IMPLEMENTED.value,
+            embedding_dimension=768,
+            message="Project successfully vectorized and ingested into knowledge base.",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to ingest project into knowledge base: {str(exc)}",
+        )

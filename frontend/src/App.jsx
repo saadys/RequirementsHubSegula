@@ -143,9 +143,9 @@ export default function App() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(15, 23, 42, 0.8)', padding: '6px 14px', borderRadius: '9999px', border: '1px solid var(--border-glass)' }}>
-            <Server size={14} color={health?.status === 'ok' ? '#34D399' : '#F87171'} />
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: health?.status === 'ok' ? '#34D399' : '#F87171' }}>
-              {health?.status === 'ok' ? 'Backend Online' : 'Offline'}
+            <Server size={14} color={(health?.status === 'healthy' || health?.status === 'ok') ? '#34D399' : '#F87171'} />
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: (health?.status === 'healthy' || health?.status === 'ok') ? '#34D399' : '#F87171' }}>
+              {(health?.status === 'healthy' || health?.status === 'ok') ? 'Backend Online' : 'Offline'}
             </span>
           </div>
         </div>

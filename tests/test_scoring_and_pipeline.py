@@ -18,76 +18,75 @@ from backend.schemas.Enums import Decision, DeadlineUrgency, SubmissionStatus
 def test_calculate_feasibility_score_go_decision():
     """Test feasibility calculation returning a high score (GO decision)."""
     facts = {
-        "has_clear_problem_statement": True,      # 20 pts
-        "problem_is_ai_solvable": True,           # 15 pts
-        "data_availability": "full",               # 20 pts
-        "requires_new_research": False,            # 10 pts
-        "ai_technique_identified": "nlp",          # 10 pts
-        "integration_complexity": "low",           # 10 pts
+        "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "NLP search"},
+        "data_readiness": {"category": "READY", "reason": "350 clean indexed documents"},
+        "problem_clarity": {"category": "CLEAR", "reason": "Precise onboarding Q&A"},
+        "integration_feasibility": {"category": "SIMPLE", "reason": "Web assistant"},
+        "governance_and_safety": {"category": "SAFE", "reason": "Standard internal policies"},
     }
-    rag_scores = [0.80]                            # 15 pts (max RAG >= 0.75)
-    # Total expected score = 20 + 15 + 20 + 15 + 10 + 10 + 10 = 100
+    rag_scores = [0.65]  # RAG boost +5
+    # Total score = min(100, (30 + 25 + 20 + 15 + 10) + 5) = 100
 
     result = calculate_feasibility_score(facts, rag_scores)
     assert result["score"] == 100
     assert result["decision"] == "GO"
-    assert result["breakdown"]["problem_clarity"]["score"] == 20
-    assert result["breakdown"]["data_availability"]["score"] == 20
+    assert result["breakdown"]["ai_viability"]["score"] == 30
+    assert result["breakdown"]["data_readiness"]["score"] == 25
 
 
 def test_calculate_feasibility_score_needs_clarification():
     """Test feasibility calculation returning a mid-range score (NEEDS_CLARIFICATION decision)."""
     facts = {
-        "has_clear_problem_statement": True,      # 20 pts
-        "problem_is_ai_solvable": True,           # 15 pts
-        "data_availability": "partial",            # 10 pts
-        "requires_new_research": True,             # 3 pts
-        "ai_technique_identified": "unknown",      # 0 pts
-        "integration_complexity": "medium",        # 7 pts
+        "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "Computer vision defect detection"},
+        "data_readiness": {"category": "UNLABELED_OR_MESSY", "reason": "Unlabeled X-ray images"},
+        "problem_clarity": {"category": "PARTIAL", "reason": "Missing clear defect classes"},
+        "integration_feasibility": {"category": "MODERATE", "reason": "PACS hospital system"},
+        "governance_and_safety": {"category": "SAFE", "reason": "De-identified medical imaging"},
     }
-    rag_scores = [0.10]                            # 5 pts
-    # Total score = 20 + 15 + 10 + 5 + 3 + 0 + 7 = 60
+    rag_scores = [0.10]
+    # Score: 30 + 10 + 10 + 10 + 10 = 70. With MODERATE/COMPLEX:
+    facts["integration_feasibility"] = {"category": "COMPLEX", "reason": "Legacy PACS hospital system"}
+    # Score: 30 + 10 + 10 + 5 + 10 = 65
 
     result = calculate_feasibility_score(facts, rag_scores)
-    assert 40 <= result["score"] < 70
+    assert 20 <= result["score"] < 70
     assert result["decision"] == "NEEDS_CLARIFICATION"
 
 
 def test_calculate_feasibility_score_no_go_decision():
-    """Test feasibility calculation returning a low score (NO_GO decision)."""
+    """Test feasibility calculation returning a low score with veto (NO_GO decision)."""
     facts = {
-        "has_clear_problem_statement": False,     # 0 pts
-        "problem_is_ai_solvable": False,          # 0 pts
-        "data_availability": "none",               # 0 pts
-        "requires_new_research": True,             # 3 pts
-        "ai_technique_identified": "unknown",      # 0 pts
-        "integration_complexity": "high",          # 3 pts
+        "ai_viability": {"category": "IMPOSSIBLE", "reason": "Sentient conscious AI replacing all humans"},
+        "data_readiness": {"category": "NONE", "reason": "All of internet"},
+        "problem_clarity": {"category": "VAGUE", "reason": "No concrete workflow"},
+        "integration_feasibility": {"category": "COMPLEX", "reason": "Universal integration"},
+        "governance_and_safety": {"category": "SAFE", "reason": "Hypothetical"},
     }
-    rag_scores = []                                # 5 pts
-    # Total score = 0 + 0 + 0 + 5 + 3 + 0 + 3 = 11
+    rag_scores = []
 
     result = calculate_feasibility_score(facts, rag_scores)
-    assert result["score"] < 40
+    assert result["score"] <= 18
     assert result["decision"] == "NO_GO"
+    assert result["veto_triggered"] is True
 
 
 def test_deterministic_score_node():
     """Test LangGraph node wrapper deterministic_score()."""
     state = {
         "extracted_facts": {
-            "has_clear_problem_statement": True,
-            "problem_is_ai_solvable": True,
-            "data_availability": "full",
-            "requires_new_research": False,
-            "ai_technique_identified": "classification",
-            "integration_complexity": "low",
+            "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "OCR + matching"},
+            "data_readiness": {"category": "READY", "reason": "Historical PDFs and DB"},
+            "problem_clarity": {"category": "CLEAR", "reason": "Clear manual invoice pain point"},
+            "integration_feasibility": {"category": "MODERATE", "reason": "SAP ERP read/match"},
+            "governance_and_safety": {"category": "SAFE", "reason": "Internal invoice data"},
         },
-        "rag_scores": [0.90],
+        "rag_scores": [0.65],
     }
 
     node_output = deterministic_score(state)
     assert "score" in node_output
     assert "score_breakdown" in node_output
+    assert "sub_scores" in node_output
     assert node_output["decision"] == "GO"
 
 

@@ -1,12 +1,11 @@
-"""Tests for LLM structured output extraction. Owner: Track A"""
+"""Tests for LLM structured output extraction (5 Pillars). Owner: Track A"""
 
 import pytest
-from unittest.mock import patch, AsyncMock
 from backend.nodes.llm_analyze import llm_analyze
 
 
 def test_llm_analyze_valid_fact_extraction():
-    """Test that llm_analyze produces a valid FactExtraction dictionary for realistic input."""
+    """Test that llm_analyze produces a valid CategoricalFactExtraction dictionary for realistic input."""
     state = {
         "form_data": {
             "project_name": "Smart Onboarding Bot",
@@ -20,10 +19,9 @@ def test_llm_analyze_valid_fact_extraction():
         "department": "corporate_support",
         "clarification_round": 0,
         "clarification_answers": [],
+        "similar_projects": [],
+        "rag_scores": [],
     }
-
-    state["similar_projects"] = []
-    state["rag_scores"] = []
 
     # Run LLM analyze
     result = llm_analyze(state)
@@ -31,30 +29,26 @@ def test_llm_analyze_valid_fact_extraction():
     facts = result["extracted_facts"]
     assert facts is not None
 
-    # Check field types & values
-    assert isinstance(facts["has_clear_problem_statement"], bool)
-    assert facts["has_clear_problem_statement"] is True
+    # Check 5 Pillars
+    assert "ai_viability" in facts
+    assert facts["ai_viability"]["category"] in ["HIGHLY_VIABLE", "MARGINAL", "NOT_AI", "IMPOSSIBLE"]
+    assert len(facts["ai_viability"]["reason"]) > 0
 
-    assert isinstance(facts["problem_is_ai_solvable"], bool)
-    assert facts["problem_is_ai_solvable"] is True
+    assert "data_readiness" in facts
+    assert facts["data_readiness"]["category"] in ["READY", "UNLABELED_OR_MESSY", "NONE"]
+    assert len(facts["data_readiness"]["reason"]) > 0
 
-    allowed_categories = [
-        "classification", "regression", "clustering", "nlp",
-        "computer_vision", "time_series", "recommendation",
-        "optimization", "generative", "other", "unknown"
-    ]
-    assert facts["problem_category"] in allowed_categories
-    assert facts["problem_category"] == "nlp"
+    assert "problem_clarity" in facts
+    assert facts["problem_clarity"]["category"] in ["CLEAR", "PARTIAL", "CONTRADICTORY", "VAGUE"]
+    assert len(facts["problem_clarity"]["reason"]) > 0
 
-    assert facts["data_availability"] in ["none", "partial", "full"]
-    assert facts["data_availability"] == "full"
+    assert "integration_feasibility" in facts
+    assert facts["integration_feasibility"]["category"] in ["SIMPLE", "MODERATE", "COMPLEX"]
 
-    assert isinstance(facts["ai_technique_identified"], str)
-    assert len(facts["ai_technique_identified"]) > 0
+    assert "governance_and_safety" in facts
+    assert facts["governance_and_safety"]["category"] in ["SAFE", "MODERATE_RISK", "CRITICAL_RISK"]
 
-    assert isinstance(facts["extracted_requirements"], list)
-    assert len(facts["extracted_requirements"]) > 0
+    assert "identified_technique" in facts
+    assert "project_summary" in facts
+    assert len(facts["project_summary"]) > 5
 
-    assert isinstance(facts["risks_identified"], list)
-    assert isinstance(facts["summary"], str)
-    assert len(facts["summary"]) > 10

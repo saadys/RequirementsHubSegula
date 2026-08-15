@@ -63,10 +63,15 @@ async def test_rag_node_finds_similar_project():
     mock_meta = {"id": "irfane-001", "project_name": "IRFANE Chatbot"}
     mock_db = AsyncMock()
 
-    # Score 0.70 → above RAG_SIMILAR_THRESHOLD (0.60) but below RAG_EXACT_MATCH_THRESHOLD (0.75)
+    from backend import config
+    sim_score = min(0.99, getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60) + 0.01)
+    exact_threshold = getattr(config, "RAG_EXACT_MATCH_THRESHOLD", 0.83)
+    if sim_score >= exact_threshold:
+        sim_score = exact_threshold - 0.01
+
     with patch(
         "backend.nodes.rag_search.search_similar",
-        return_value=[("Problem: HR issues", 0.70, mock_meta)]
+        return_value=[("Problem: HR issues", sim_score, mock_meta)]
     ):
         state = {
             "form_data": {
@@ -75,6 +80,7 @@ async def test_rag_node_finds_similar_project():
             "parsed_files_text": [],
         }
         result = await rag_search(state, db=mock_db)
+
 
     assert "similar_projects" in result
     assert len(result["similar_projects"]) == 1
@@ -130,3 +136,57 @@ async def test_rag_node_unrelated_query_no_exact_match():
     assert result["exact_match_project"] is None
     # Score 0.35 < 0.60 threshold → not in similar_projects
     assert len(result["similar_projects"]) == 0
+
+
+# ── Unit tests: ingest_project service ────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_ingest_project_service_success():
+    """Verifies ingest_project builds rich doc, embeds, merges to DB, and updates Submission status."""
+    from backend.services.vectorstore import ingest_project
+    from backend.schemas import HistoricProjectIngestInput
+
+    mock_db = AsyncMock()
+    mock_submission = MagicMock()
+    mock_submission.status = "COMPLETED"
+    mock_db.get.return_value = mock_submission
+
+    # Mock merge to return the passed entity
+    def fake_merge(record):
+        return record
+
+    mock_db.merge.side_effect = fake_merge
+
+    input_data = HistoricProjectIngestInput(
+        project_name="Predictive Maintenance for High-Speed Turbines",
+        department="aerospace",
+        problem_description="Turbine vibration data needs early fault detection.",
+        solution_description="Deployed 1D-CNN + LSTM on vibration sensors with edge inference.",
+        outcome="Detected bearing failures 48 hours in advance with 97.8% precision.",
+        contact_person="Dr. Alex Vance",
+        year=2026,
+        ai_techniques=["1D-CNN", "LSTM", "Time-Series", "PyTorch"],
+        tags=["aerospace", "predictive_maintenance", "vibration", "edge"],
+        lessons_learned="High-frequency sampling required downsampling to 1kHz for edge model.",
+    )
+
+    with patch("backend.services.vectorstore.generate_embedding", return_value=[0.05] * 768) as mock_embed:
+        record, historic_id = await ingest_project(
+            submission_id="d3b07384-d113-46fb-a0e0-c8f936173001",
+            project_data=input_data,
+            db=mock_db,
+        )
+
+    assert historic_id.startswith("HIST-2026-")
+    assert record.project_name == "Predictive Maintenance for High-Speed Turbines"
+    assert record.department == "aerospace"
+    assert len(record.embedding) == 768
+    assert mock_submission.status == "IMPLEMENTED"
+    assert mock_db.commit.called
+    assert mock_embed.called
+
+    # Verify doc_string sent to embedder
+    embedded_text = mock_embed.call_args[0][0]
+    assert "Predictive Maintenance for High-Speed Turbines" in embedded_text
+    assert "1D-CNN" in embedded_text
+    assert "Lessons Learned: High-frequency sampling" in embedded_text

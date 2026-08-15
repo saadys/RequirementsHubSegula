@@ -8,14 +8,14 @@ Owner: Track A
 """
 
 from backend.contracts.state import PipelineState
-from backend.schemas import FactExtraction
+from backend.schemas import CategoricalFactExtraction
 from backend.services.llm import get_structured_llm
 from backend import config
 from backend.LLM.templates.corporate_support import get_prompt as get_corporate_support_prompt
 
 
 def llm_analyze(state: PipelineState) -> dict:
-    """Node that invokes the structured LLM to extract facts from the request."""
+    """Node that invokes the structured LLM to extract 5-pillar categorical facts from the request."""
     form_data = state.get("form_data", {}).copy()
     parsed_files = state.get("parsed_files_text", [])
     
@@ -52,11 +52,11 @@ def llm_analyze(state: PipelineState) -> dict:
         clarification_questions=clarification_questions,
     )
 
-    # Invoke LLM provider with structured output schema (FactExtraction)
+    # Invoke LLM provider with structured output schema (CategoricalFactExtraction)
     llm = get_structured_llm()
-    result: FactExtraction = llm.generate_structured_output(
+    result: CategoricalFactExtraction = llm.generate_structured_output(
         prompt=messages,
-        response_schema=FactExtraction,
+        response_schema=CategoricalFactExtraction,
     )
 
     return {

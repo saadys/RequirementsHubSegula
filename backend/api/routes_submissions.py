@@ -14,10 +14,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.config import DATA_DIR
+from backend.config import DATA_DIR, MAX_CLARIFICATION_ROUNDS
 from backend.graph.builder import get_compiled_graph
 from backend.models.BaseDataModel import AsyncSessionLocal, get_db
 from backend.models.ClarificationModel import ClarificationModel
+from backend.models.FactExtractionModel import FactExtractionModel
 from backend.models.ReportModel import ReportModel
 from backend.models.ScoringModel import ScoringModel
 from backend.models.SubmissionModel import SubmissionModel
@@ -37,8 +38,27 @@ def entity_to_submission_response(sub: Submission) -> SubmissionResponse:
     clar_rounds = sub.clarification_rounds or []
     overrides = sub.reviewer_overrides or []
 
-    latest_questions = clar_rounds[-1].questions if clar_rounds else []
+    latest_round = clar_rounds[-1] if clar_rounds else None
+    round_num = latest_round.round_number if latest_round else 0
     decision = overrides[0].new_decision if overrides else (scoring.decision if scoring else None)
+
+    # Check if latest clarification round is already answered or completed
+    has_answered_latest = bool(latest_round and latest_round.answers and len(latest_round.answers) > 0)
+    is_clarification_done = False
+    if has_answered_latest and round_num >= MAX_CLARIFICATION_ROUNDS:
+        is_clarification_done = True
+    elif rep is not None and sub.status in ("COMPLETED", "REJECTED", "FAST_TRACK"):
+        is_clarification_done = True
+
+    active_questions = [] if (is_clarification_done or has_answered_latest) else (latest_round.questions if latest_round else [])
+
+    sub_scores = {}
+    veto_triggered = False
+    veto_reasons = []
+    if scoring and scoring.breakdown:
+        sub_scores = scoring.breakdown.get("sub_scores") or scoring.breakdown.get("pillar_scores") or {}
+        veto_triggered = bool(scoring.breakdown.get("veto_triggered", False))
+        veto_reasons = scoring.breakdown.get("veto_reasons") or []
 
     form_data = {
         "project_name": sub.project_name,
@@ -64,9 +84,14 @@ def entity_to_submission_response(sub: Submission) -> SubmissionResponse:
         status=sub.status,
         decision=decision,
         score=scoring.score if scoring else None,
+        sub_scores=sub_scores,
+        veto_triggered=veto_triggered,
+        veto_reasons=veto_reasons,
         report_type=rep.report_type if rep else None,
         missing_fields=fact.extracted_requirements if (fact and fact.extracted_requirements) else [],
-        clarification_questions=latest_questions or [],
+        clarification_questions=active_questions,
+        clarification_round=round_num,
+        max_rounds=MAX_CLARIFICATION_ROUNDS,
         parsed_files_text=[],
         report=rep.content if rep else None,
         created_at=created_at_str,
@@ -111,20 +136,37 @@ async def _execute_pipeline_in_background(
 
         async with AsyncSessionLocal() as db:
             sub_model = SubmissionModel(db)
+            fact_model = FactExtractionModel(db)
             scoring_model = ScoringModel(db)
             report_model = ReportModel(db)
             clar_model = ClarificationModel(db)
 
-            await sub_model.update_status(request_id, status_str)
+            if result_state.get("extracted_facts"):
+                await fact_model.create_or_update(
+                    request_id,
+                    result_state.get("extracted_facts") or {},
+                )
 
             if result_state.get("score") is not None or result_state.get("decision"):
+                sub_scores_val = result_state.get("sub_scores") or {}
+                veto_trig = result_state.get("veto_triggered", False)
+                veto_reasons_val = result_state.get("veto_reasons") or []
+
+                breakdown_payload = {
+                    "sub_scores": sub_scores_val,
+                    "veto_triggered": veto_trig,
+                    "veto_reasons": veto_reasons_val,
+                }
+                if result_state.get("score_breakdown"):
+                    breakdown_payload["legacy_breakdown"] = result_state.get("score_breakdown")
+
                 await scoring_model.create_or_update(
                     request_id,
                     {
                         "score": result_state.get("score"),
                         "percentage": result_state.get("score"),
                         "decision": result_state.get("decision"),
-                        "breakdown": result_state.get("score_breakdown") or {},
+                        "breakdown": breakdown_payload,
                     },
                 )
 
@@ -142,6 +184,10 @@ async def _execute_pipeline_in_background(
                     questions=result_state.get("clarification_questions", []),
                     answers=result_state.get("clarification_answers", []),
                 )
+
+            # Update status to completed/needs_clarification at the very end after all child records are committed
+            await sub_model.update_status(request_id, status_str)
+
 
         logger.info(f"Background task finished for request {request_id}. Status: {status_str}")
     except Exception as e:
@@ -233,7 +279,11 @@ async def submit_request_with_files(
     req_uuid = uuid.uuid4()
     request_id = str(req_uuid)
     upload_dir = os.path.join(DATA_DIR, "uploads", request_id)
-    os.makedirs(upload_dir, exist_ok=True)
+    try:
+        os.makedirs(upload_dir, exist_ok=True)
+    except PermissionError:
+        upload_dir = os.path.join("/tmp", "uploads", request_id)
+        os.makedirs(upload_dir, exist_ok=True)
 
     saved_paths = []
     for upload in file_list:
