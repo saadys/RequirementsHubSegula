@@ -12,11 +12,11 @@ import time
 
 # Enforce USE_LOCAL_LLM before importing config or services
 os.environ["USE_LOCAL_LLM"] = "true"
-os.environ["LOCAL_MODEL"] = "ollama/qwen2.5:7b-instruct"
+os.environ["LOCAL_MODEL"] = "ollama/qwen3:8b"
 
 from backend import config
 config.USE_LOCAL_LLM = True
-config.LOCAL_MODEL = "ollama/qwen2.5:7b-instruct"
+config.LOCAL_MODEL = "ollama/qwen3:8b"
 
 from backend.LLM.providers.LocalLLM import LocalLLMProvider
 from backend.LLM.LLMProviderFactory import LLMProviderFactory

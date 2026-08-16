@@ -46,14 +46,34 @@ def _get_genai_client() -> google_genai.Client:
 
 async def generate_embedding(text_input: str) -> list[float]:
     """
-    Generates a Gemini embedding vector for the given text.
-
-    Returns:
-        list[float] of length EMBEDDING_DIMENSION (768 for text-embedding-004).
-
-    Pitfall: google-genai embed_content is synchronous — we run it directly
-    as it's a lightweight HTTP call managed by the event loop thread pool.
+    Generates an embedding vector for the given text.
+    If USE_LOCAL_LLM is True, calls Ollama /api/embed using LOCAL_EMBEDDING_MODEL.
+    Otherwise, uses Gemini text-embedding via google-genai SDK.
     """
+    if config.USE_LOCAL_LLM:
+        import httpx
+        model_name = getattr(config, "LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
+        base_url = config.OLLAMA_BASE_URL.rstrip("/")
+        url = f"{base_url}/api/embed"
+        headers = {"Content-Type": "application/json"}
+        if getattr(config, "OLLAMA_API_KEY", ""):
+            headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(
+                    url,
+                    json={"model": model_name, "input": text_input},
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    embeddings = data.get("embeddings", [])
+                    if embeddings:
+                        return embeddings[0]
+                logger.error("Local Ollama embedding returned status %d: %s", resp.status_code, resp.text)
+        except Exception as exc:
+            logger.warning("Local Ollama embedding failed: %s", exc)
+
     keys_to_try = [k for k in [config.GEMINI_API_KEY_1, config.GEMINI_API_KEY_2] if k]
     last_error: Exception | None = None
 
@@ -77,15 +97,15 @@ async def generate_embedding(text_input: str) -> list[float]:
     else:
         last_error = ValueError("No Gemini API keys configured.")
 
-    if config.USE_LOCAL_LLM or config.ENV == "development":
-        logger.warning("[VectorStore] Gemini Embedding API unavailable (%s). Using deterministic local 768-dim vector.", last_error)
+    if config.ENV == "development":
+        logger.warning("[VectorStore] Embedding API unavailable (%s). Using deterministic local vector.", last_error)
         import hashlib
         import random
         seed = int(hashlib.sha256(text_input.encode("utf-8")).hexdigest()[:8], 16)
         rng = random.Random(seed)
         return [rng.uniform(-0.1, 0.1) for _ in range(config.EMBEDDING_DIMENSION)]
 
-    raise RuntimeError(f"All Gemini API keys failed for embedding. Last error: {last_error}")
+    raise RuntimeError(f"All embedding methods failed. Last error: {last_error}")
 
 
 # ── Seed Data ─────────────────────────────────────────────────────────────────

@@ -87,8 +87,14 @@ class CategoricalFactExtraction(BaseModel):
 
 class QuestionItem(BaseModel):
     question: str
-    target_pillar: str
-    technical_reasoning: str
+    target_pillar: str = Field(
+        default="problem_clarity",
+        description="Target pillar or requirement category (e.g. data_readiness, problem_clarity, integration, governance)",
+    )
+    technical_reasoning: str = Field(
+        default="Required to resolve scope and technical feasibility ambiguities.",
+        description="Technical rationale for why this clarification is needed",
+    )
 
 
 class ClarificationQuestionsModel(BaseModel):
