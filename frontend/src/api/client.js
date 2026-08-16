@@ -24,7 +24,16 @@ async function request(endpoint, options = {}) {
 
   try {
     const response = await fetch(url, config);
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    let data;
+
+    if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      data = { detail: text ? text.replace(/<[^>]*>/g, '').trim().slice(0, 200) : `HTTP Error ${response.status}` };
+    }
+
     if (!response.ok) {
       throw new Error(data.detail || `HTTP Error ${response.status}`);
     }
@@ -86,8 +95,9 @@ export async function fetchSubmissionById(requestId) {
 
 /**
  * Polls the backend every intervalMs until status is no longer PENDING
+ * Default timeout is 180s (72 attempts * 2.5s) to accommodate local LLM inference on T4 GPUs
  */
-export async function pollSubmissionUntilComplete(requestId, intervalMs = 2000, maxAttempts = 30) {
+export async function pollSubmissionUntilComplete(requestId, intervalMs = 2500, maxAttempts = 72) {
   let attempts = 0;
   while (attempts < maxAttempts) {
     const result = await fetchSubmissionById(requestId);

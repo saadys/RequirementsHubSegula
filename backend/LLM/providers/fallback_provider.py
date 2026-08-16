@@ -18,6 +18,10 @@ class FallbackLLMProvider(LLMInterface):
         self.fallback = fallback_provider
         self.logger = logging.getLogger(__name__)
 
+    @property
+    def model_name(self) -> str:
+        return getattr(self.primary, "model_name", "fallback-provider")
+
     def generate_text(
         self,
         prompt: str,
