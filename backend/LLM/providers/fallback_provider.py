@@ -6,7 +6,7 @@ and transparently falls back to a secondary provider upon API errors.
 """
 
 import logging
-from typing import Dict, List, Optional, Type
+from typing import Dict, Iterator, List, Optional, Type
 from backend.LLM.LLMInterfaces import LLMInterface, T
 
 
@@ -48,6 +48,40 @@ class FallbackLLMProvider(LLMInterface):
                     max_output_tokens=max_output_tokens,
                     temperature=temperature,
                 )
+            raise e
+
+    def generate_text_stream(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        max_output_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> Iterator[Dict[str, str]]:
+        try:
+            primary_iter = self.primary.generate_text_stream(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                chat_history=chat_history,
+                max_output_tokens=max_output_tokens,
+                temperature=temperature,
+            )
+            for chunk in primary_iter:
+                yield chunk
+            return
+        except Exception as e:
+            if self.fallback:
+                self.logger.warning("Primary LLM Provider stream failed (%s). Falling back to secondary provider", e)
+                fallback_iter = self.fallback.generate_text_stream(
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    chat_history=chat_history,
+                    max_output_tokens=max_output_tokens,
+                    temperature=temperature,
+                )
+                for chunk in fallback_iter:
+                    yield chunk
+                return
             raise e
 
     def generate_structured_output(

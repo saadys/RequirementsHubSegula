@@ -150,7 +150,8 @@ def build_system_prompt(
     if clarification_round > 0 and clarification_questions and clarification_answers:
         qa_pairs = ""
         for q, a in zip(clarification_questions, clarification_answers):
-            qa_pairs += f"\n- **Q:** {q}\n  **A:** {a}\n"
+            q_text = q.get("question", str(q)) if isinstance(q, dict) else str(q)
+            qa_pairs += f"\n- **Q:** {q_text}\n  **A:** {a}\n"
 
         parts.append(
             CLARIFICATION_CONTEXT_TEMPLATE.safe_substitute(

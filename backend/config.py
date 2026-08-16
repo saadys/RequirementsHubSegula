@@ -27,7 +27,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0"))  # Deterministic output for fact extraction
 LLM_TEMPERATURE_CLARIFICATION = float(os.getenv("LLM_TEMPERATURE_CLARIFICATION", "0.3"))  # Slight variation for natural questions
-PRIMARY_MODEL = os.getenv("PRIMARY_MODEL", "gemini/gemini-3.1-flash-lite")
+PRIMARY_MODEL = os.getenv("PRIMARY_MODEL", "gemini/gemini-2.5-flash")
 FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "openai/gpt-4o")
 
 

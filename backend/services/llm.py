@@ -22,3 +22,8 @@ def get_structured_llm() -> LLMInterface:
 def get_clarification_llm() -> LLMInterface:
     """Returns an LLMInterface provider for clarification question generation."""
     return get_llm(temperature=config.LLM_TEMPERATURE_CLARIFICATION)
+
+
+def get_streaming_llm(temperature: float = config.LLM_TEMPERATURE) -> LLMInterface:
+    """Returns an LLMInterface provider for real-time token streaming with fallback support."""
+    return get_llm(temperature=temperature)
