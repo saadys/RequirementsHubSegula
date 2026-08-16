@@ -8,7 +8,7 @@ import json
 import re
 import time
 import urllib.request
-from typing import Dict, List, Optional, Type
+from typing import Dict, Iterator, List, Optional, Type
 import litellm
 
 from backend import config
@@ -73,6 +73,104 @@ class LocalLLMProvider(BaseLLMProvider):
         raw_content = response.choices[0].message.content
         # Strip thinking tags if present in text generation
         return re.sub(r"<think>[\s\S]*?</think>", "", raw_content, flags=re.IGNORECASE).strip()
+
+    def generate_text_stream(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        max_output_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> Iterator[Dict[str, str]]:
+        messages = self._format_messages(prompt=prompt, system_prompt=system_prompt)
+        temp = temperature if temperature is not None else self.default_temperature
+
+        start_time = time.perf_counter()
+        response = litellm.completion(
+            model=self.model_name,
+            messages=messages,
+            temperature=temp,
+            max_tokens=max_output_tokens,
+            api_base=self.api_base,
+            extra_headers=self._get_extra_headers(),
+            stream=True,
+            timeout=120,
+        )
+
+        in_thinking = False
+        buffer = ""
+
+        for chunk in response:
+            if not chunk.choices or not chunk.choices[0].delta:
+                continue
+
+            delta = chunk.choices[0].delta
+            reasoning = getattr(delta, "reasoning_content", None)
+            if reasoning:
+                yield {"type": "thinking", "content": reasoning}
+
+            content = getattr(delta, "content", "") or ""
+            if not content:
+                continue
+
+            buffer += content
+
+            while buffer:
+                if not in_thinking:
+                    if "<think>" in buffer:
+                        pre_think, _, post_think = buffer.partition("<think>")
+                        if pre_think:
+                            yield {"type": "token", "content": pre_think}
+                        in_thinking = True
+                        buffer = post_think
+                    elif "<" in buffer:
+                        # Check if buffer ends with a partial '<think>' tag
+                        tag_idx = buffer.find("<")
+                        potential = buffer[tag_idx:]
+                        if "<think>".startswith(potential):
+                            if tag_idx > 0:
+                                yield {"type": "token", "content": buffer[:tag_idx]}
+                                buffer = potential
+                            break
+                        else:
+                            yield {"type": "token", "content": buffer[:tag_idx + 1]}
+                            buffer = buffer[tag_idx + 1:]
+                    else:
+                        yield {"type": "token", "content": buffer}
+                        buffer = ""
+                else:
+                    if "</think>" in buffer:
+                        think_text, _, post_think = buffer.partition("</think>")
+                        if think_text:
+                            yield {"type": "thinking", "content": think_text}
+                        in_thinking = False
+                        buffer = post_think.lstrip("\n")
+                    elif "<" in buffer:
+                        # Check if buffer ends with a partial '</think>' tag
+                        tag_idx = buffer.find("<")
+                        potential = buffer[tag_idx:]
+                        if "</think>".startswith(potential):
+                            if tag_idx > 0:
+                                yield {"type": "thinking", "content": buffer[:tag_idx]}
+                                buffer = potential
+                            break
+                        else:
+                            yield {"type": "thinking", "content": buffer[:tag_idx + 1]}
+                            buffer = buffer[tag_idx + 1:]
+                    else:
+                        yield {"type": "thinking", "content": buffer}
+                        buffer = ""
+
+        if buffer:
+            event_type = "thinking" if in_thinking else "token"
+            yield {"type": event_type, "content": buffer}
+
+        duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        self.logger.info(
+            "Local LLM stream completed | model=%s duration_ms=%.2f",
+            self.model_name,
+            duration_ms,
+        )
 
     def _clean_json_string(self, content: str) -> str:
         content = content.strip()

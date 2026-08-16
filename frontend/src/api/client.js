@@ -68,13 +68,73 @@ export async function fetchDepartmentFields(departmentId) {
 }
 
 // -------------------------------------------------------------
-// Module B: Core Submissions
+// Module B: Core Submissions & Real-Time SSE Stream
 // -------------------------------------------------------------
 export async function submitRequest(submissionPayload) {
   return request('/submissions/', {
     method: 'POST',
     body: JSON.stringify(submissionPayload),
   });
+}
+
+export async function submitRequestStream(payload, onEvent, signal) {
+  const url = `${BASE_URL}/submissions/stream`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let message = `Stream failed with status ${response.status}`;
+    try {
+      const parsed = JSON.parse(errorText);
+      message = parsed.detail || message;
+    } catch {
+      message = errorText || message;
+    }
+    throw new Error(message);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    let currentEvent = 'message';
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) {
+        currentEvent = 'message';
+        continue;
+      }
+      if (line.startsWith('event:')) {
+        currentEvent = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        const rawData = line.slice(5).trim();
+        try {
+          const parsedData = JSON.parse(rawData);
+          if (onEvent) {
+            onEvent({ event: currentEvent, data: parsedData });
+          }
+        } catch (err) {
+          console.warn('[SSE Parse Warning]', err, rawData);
+        }
+      }
+    }
+  }
 }
 
 export async function submitRequestWithUpload(formData) {
@@ -122,6 +182,66 @@ export async function submitClarification(requestId, answersList) {
     method: 'POST',
     body: JSON.stringify({ answers: answersList }),
   });
+}
+
+export async function submitClarificationStream(requestId, answersList, onEvent, signal) {
+  const url = `${BASE_URL}/submissions/${requestId}/clarification/stream`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+    },
+    body: JSON.stringify({ answers: answersList }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let message = `Clarification stream failed with status ${response.status}`;
+    try {
+      const parsed = JSON.parse(errorText);
+      message = parsed.detail || message;
+    } catch {
+      message = errorText || message;
+    }
+    throw new Error(message);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    let currentEvent = 'message';
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) {
+        currentEvent = 'message';
+        continue;
+      }
+      if (line.startsWith('event:')) {
+        currentEvent = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        const rawData = line.slice(5).trim();
+        try {
+          const parsedData = JSON.parse(rawData);
+          if (onEvent) {
+            onEvent({ event: currentEvent, data: parsedData });
+          }
+        } catch (err) {
+          console.warn('[SSE Parse Warning]', err, rawData);
+        }
+      }
+    }
+  }
 }
 
 // -------------------------------------------------------------

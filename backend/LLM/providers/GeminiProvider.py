@@ -5,7 +5,7 @@ Concrete provider for Google Gemini models with multi-key round robin and Pydant
 """
 
 import time
-from typing import Dict, List, Optional, Type
+from typing import Dict, Iterator, List, Optional, Type
 from pydantic import BaseModel
 import litellm
 
@@ -17,7 +17,7 @@ from backend.LLM.LLMInterfaces import T
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini Provider with multi-key failover and structured output."""
 
-    def __init__(self, model_name: str = "gemini/gemini-1.5-flash", temperature: float = 0.0):
+    def __init__(self, model_name: str = "gemini/gemini-2.5-flash", temperature: float = 0.0):
         # Clean model prefix if raw name passed
         clean_model = model_name if model_name.startswith("gemini/") else f"gemini/{model_name}"
         super().__init__(model_name=clean_model, temperature=temperature)
@@ -75,6 +75,49 @@ class GeminiProvider(BaseLLMProvider):
             return response.choices[0].message.content
 
         return self._execute_with_keys(_call)
+
+    def generate_text_stream(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        chat_history: Optional[List[Dict[str, str]]] = None,
+        max_output_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ) -> Iterator[Dict[str, str]]:
+        messages = self._format_messages(prompt=prompt, system_prompt=system_prompt)
+        temp = temperature if temperature is not None else self.default_temperature
+
+        last_exception = None
+        for key in self.api_keys:
+            try:
+                response = litellm.completion(
+                    model=self.model_name,
+                    messages=messages,
+                    temperature=temp,
+                    max_tokens=max_output_tokens,
+                    api_key=key,
+                    stream=True,
+                    timeout=60,
+                )
+                start_time = time.perf_counter()
+                for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta:
+                        content = getattr(chunk.choices[0].delta, "content", "") or ""
+                        if content:
+                            yield {"type": "token", "content": content}
+                duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
+                self.logger.info(
+                    "Gemini LLM stream completed | model=%s duration_ms=%.2f",
+                    self.model_name,
+                    duration_ms,
+                )
+                return
+            except Exception as e:
+                self.logger.warning("Gemini API key failed during stream (%s). Trying next key...", e)
+                last_exception = e
+
+        if last_exception:
+            raise last_exception
 
     def generate_structured_output(
         self,

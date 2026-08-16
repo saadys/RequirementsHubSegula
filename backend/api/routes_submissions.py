@@ -35,7 +35,7 @@ def entity_to_submission_response(sub: Submission) -> SubmissionResponse:
     scoring = sub.scoring_result
     fact = sub.fact_extraction
     rep = sub.report
-    clar_rounds = sub.clarification_rounds or []
+    clar_rounds = sorted(sub.clarification_rounds or [], key=lambda r: r.round_number)
     overrides = sub.reviewer_overrides or []
 
     latest_round = clar_rounds[-1] if clar_rounds else None
@@ -111,6 +111,8 @@ def _determine_status(result_state: Dict[str, Any]) -> str:
     elif decision == Decision.NO_GO.value:
         return SubmissionStatus.REJECTED.value
     elif decision == Decision.NEEDS_CLARIFICATION.value:
+        if result_state.get("report"):
+            return SubmissionStatus.COMPLETED.value
         return SubmissionStatus.NEEDS_CLARIFICATION.value
     return SubmissionStatus.PROCESSED.value
 
