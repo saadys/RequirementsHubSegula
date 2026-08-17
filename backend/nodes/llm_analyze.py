@@ -7,6 +7,7 @@ business team's request. Uses department-specific prompts and RAG context.
 Owner: Track A
 """
 
+from typing import Any, Dict, Iterator
 from backend.contracts.state import PipelineState
 from backend.schemas import CategoricalFactExtraction
 from backend.services.llm import get_structured_llm
@@ -14,8 +15,8 @@ from backend import config
 from backend.LLM.templates.corporate_support import get_prompt as get_corporate_support_prompt
 
 
-def llm_analyze(state: PipelineState) -> dict:
-    """Node that invokes the structured LLM to extract 5-pillar categorical facts from the request."""
+def get_llm_analyze_messages(state: PipelineState) -> list:
+    """Constructs prompt messages for 5-pillar fact extraction."""
     form_data = state.get("form_data", {}).copy()
     parsed_files = state.get("parsed_files_text", [])
     
@@ -44,7 +45,7 @@ def llm_analyze(state: PipelineState) -> dict:
     prompt_builder = get_corporate_support_prompt
 
     # Build messages for LLM invocation
-    messages = prompt_builder(
+    return prompt_builder(
         form_data=form_data,
         similar_projects=filtered_projects if filtered_projects else None,
         clarification_round=clarification_round,
@@ -52,7 +53,30 @@ def llm_analyze(state: PipelineState) -> dict:
         clarification_questions=clarification_questions,
     )
 
-    # Invoke LLM provider with structured output schema (CategoricalFactExtraction)
+
+def stream_llm_analyze(state: PipelineState) -> Iterator[Dict[str, Any]]:
+    """Streams 5-pillar reasoning tokens in real-time and yields final extracted facts."""
+    messages = get_llm_analyze_messages(state)
+    llm = get_structured_llm()
+    for event in llm.generate_structured_output_stream(
+        prompt=messages,
+        response_schema=CategoricalFactExtraction,
+    ):
+        if event.get("type") == "thinking":
+            yield {"type": "thinking", "content": event.get("content", "")}
+        elif event.get("type") == "result":
+            extracted = event.get("data")
+            yield {
+                "type": "result",
+                "data": {
+                    "extracted_facts": extracted.model_dump() if hasattr(extracted, "model_dump") else extracted
+                },
+            }
+
+
+def llm_analyze(state: PipelineState) -> dict:
+    """Node that invokes the structured LLM to extract 5-pillar categorical facts from the request."""
+    messages = get_llm_analyze_messages(state)
     llm = get_structured_llm()
     result: CategoricalFactExtraction = llm.generate_structured_output(
         prompt=messages,

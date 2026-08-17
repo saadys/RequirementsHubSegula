@@ -158,6 +158,7 @@ export default function App() {
             <SubmissionForm 
               departments={departments}
               onSubmissionSuccess={handleSubmissionSuccess}
+              onOpenClarification={handleOpenClarification}
             />
           ) : (
             <SubmissionResultCard 

@@ -58,6 +58,27 @@ class LLMInterface(ABC):
         """Generates structured output validated against a Pydantic schema."""
         pass
 
+    def generate_structured_output_stream(
+        self,
+        prompt: str | List[Dict[str, str]],
+        response_schema: Type[T],
+        system_prompt: Optional[str] = None,
+        temperature: Optional[float] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Generates structured output while streaming intermediate thinking tokens.
+        
+        Yields dicts with format:
+          - {'type': 'thinking', 'content': str}
+          - {'type': 'result', 'data': T} (the final validated Pydantic model)
+        """
+        result = self.generate_structured_output(
+            prompt=prompt,
+            response_schema=response_schema,
+            system_prompt=system_prompt,
+            temperature=temperature,
+        )
+        yield {"type": "result", "data": result}
+
     @abstractmethod
     def health_check(self) -> bool:
         """Checks if the provider is configured and accessible."""

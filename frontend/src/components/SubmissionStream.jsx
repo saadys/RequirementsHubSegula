@@ -46,14 +46,63 @@ export default function SubmissionStream({
   const [finalData, setFinalData] = useState(null);
   const [error, setError] = useState(null);
 
-  const thinkingBottomRef = useRef(null);
-  const reportBottomRef = useRef(null);
+  const thinkingContainerRef = useRef(null);
+  const userHasScrolledUp = useRef(false);
+  const isProgrammaticScroll = useRef(false);
+  const [showThinkingScrollBtn, setShowThinkingScrollBtn] = useState(false);
   const streamStarted = useRef(false);
 
-  // Auto-scroll thinking box when new thought tokens arrive
+  // Direct user scroll wheel listener: immediately locks auto-scroll off when scrolling up
+  const handleThinkingWheel = (e) => {
+    if (e.deltaY < 0) {
+      // User scrolled UP -> immediately lock auto-scroll OFF!
+      userHasScrolledUp.current = true;
+      setShowThinkingScrollBtn(true);
+    } else if (e.deltaY > 0) {
+      // User scrolled DOWN -> check if returned near the bottom
+      if (thinkingContainerRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } = thinkingContainerRef.current;
+        if (scrollHeight - scrollTop - clientHeight <= 25) {
+          userHasScrolledUp.current = false;
+          setShowThinkingScrollBtn(false);
+        }
+      }
+    }
+  };
+
+  const handleThinkingScroll = (e) => {
+    // If this scroll event was triggered by our own auto-scroll, do nothing
+    if (isProgrammaticScroll.current) {
+      isProgrammaticScroll.current = false;
+      return;
+    }
+
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+    if (distanceFromBottom > 25) {
+      userHasScrolledUp.current = true;
+      setShowThinkingScrollBtn(true);
+    } else {
+      userHasScrolledUp.current = false;
+      setShowThinkingScrollBtn(false);
+    }
+  };
+
+  const scrollToBottomThinking = () => {
+    userHasScrolledUp.current = false;
+    setShowThinkingScrollBtn(false);
+    if (thinkingContainerRef.current) {
+      isProgrammaticScroll.current = true;
+      thinkingContainerRef.current.scrollTop = thinkingContainerRef.current.scrollHeight;
+    }
+  };
+
+  // Only auto-scroll inner container if user has NOT scrolled up
   useEffect(() => {
-    if (isThinkingExpanded && thinkingBottomRef.current) {
-      thinkingBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (isThinkingExpanded && thinkingContainerRef.current && !userHasScrolledUp.current) {
+      isProgrammaticScroll.current = true;
+      thinkingContainerRef.current.scrollTop = thinkingContainerRef.current.scrollHeight;
     }
   }, [thinkingContent, isThinkingExpanded]);
 
@@ -79,7 +128,12 @@ export default function SubmissionStream({
           } else if (event === 'clarification') {
             setClarificationData(data);
           } else if (event === 'thinking') {
-            setThinkingContent((prev) => prev + data.content);
+            setThinkingContent((prev) => {
+              if (!prev) {
+                setIsThinkingExpanded(true);
+              }
+              return prev + (data.content || '');
+            });
           } else if (event === 'token') {
             setReportMarkdown((prev) => prev + data.content);
           } else if (event === 'complete') {
@@ -375,22 +429,60 @@ export default function SubmissionStream({
               </button>
 
               {isThinkingExpanded && (
-                <div
-                  style={{
-                    maxHeight: '260px',
-                    overflowY: 'auto',
-                    padding: '16px 20px',
-                    background: 'rgba(10, 5, 25, 0.75)',
-                    borderTop: '1px solid rgba(139, 92, 246, 0.2)',
-                    fontSize: '0.84rem',
-                    color: '#E9D5FF',
-                    fontFamily: 'Consolas, Monaco, "Courier New", monospace',
-                    lineHeight: '1.6',
-                    whiteSpace: 'pre-wrap',
-                  }}
-                >
-                  {thinkingContent}
-                  <div ref={thinkingBottomRef} />
+                <div style={{ position: 'relative' }}>
+                  <div
+                    ref={thinkingContainerRef}
+                    onWheel={handleThinkingWheel}
+                    onScroll={handleThinkingScroll}
+                    onTouchMove={() => {
+                      if (thinkingContainerRef.current) {
+                        const { scrollTop, scrollHeight, clientHeight } = thinkingContainerRef.current;
+                        if (scrollHeight - scrollTop - clientHeight > 25) {
+                          userHasScrolledUp.current = true;
+                          setShowThinkingScrollBtn(true);
+                        }
+                      }
+                    }}
+                    style={{
+                      maxHeight: '280px',
+                      overflowY: 'auto',
+                      padding: '16px 20px',
+                      background: 'rgba(10, 5, 25, 0.75)',
+                      borderTop: '1px solid rgba(139, 92, 246, 0.2)',
+                      fontSize: '0.84rem',
+                      color: '#E9D5FF',
+                      fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                      lineHeight: '1.6',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {thinkingContent}
+                  </div>
+                  {showThinkingScrollBtn && (
+                    <button
+                      onClick={scrollToBottomThinking}
+                      style={{
+                        position: 'absolute',
+                        bottom: '12px',
+                        right: '16px',
+                        background: 'rgba(139, 92, 246, 0.9)',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: '20px',
+                        padding: '4px 12px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        zIndex: 10,
+                      }}
+                    >
+                      <ChevronDown size={14} /> Jump to latest
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -419,8 +511,8 @@ export default function SubmissionStream({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
                   {questionsList.map((q, idx) => {
                     const qText = typeof q === 'string' ? q : q.question || q.text || JSON.stringify(q);
-                    const pillar = typeof q === 'object' ? q.pillar : null;
-                    const context = typeof q === 'object' ? q.context : null;
+                    const pillar = typeof q === 'object' ? (q.target_pillar || q.pillar) : null;
+                    const context = typeof q === 'object' ? (q.technical_reasoning || q.context) : null;
 
                     return (
                       <div
@@ -512,7 +604,6 @@ export default function SubmissionStream({
                       }}
                     />
                   )}
-                  <div ref={reportBottomRef} />
                   {isComplete && (
                     <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid var(--border-glass)', display: 'flex', justifyContent: 'flex-end' }}>
                       <button
@@ -528,7 +619,13 @@ export default function SubmissionStream({
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '240px', color: '#64748B' }}>
                   <Loader2 size={32} color="#3B82F6" className="spin-animation" style={{ marginBottom: '12px' }} />
-                  <p style={{ fontSize: '0.9rem' }}>Analyzing requirements & initializing report stream...</p>
+                  <p style={{ fontSize: '0.9rem', color: '#94A3B8' }}>
+                    {currentNode === 'llm_analyze'
+                      ? 'AI Architect evaluating 5-pillar feasibility & streaming reasoning...'
+                      : currentNode === 'rag_search'
+                      ? 'Searching historic Segula database & technical index...'
+                      : 'Analyzing requirements & initializing report stream...'}
+                  </p>
                 </div>
               )}
             </div>
