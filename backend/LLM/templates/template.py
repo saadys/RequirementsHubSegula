@@ -70,9 +70,10 @@ Carefully read the team's project request (problem description, current process,
 - **project_summary**: 2-3 sentences concise technical summary of the submission.
 
 ## Critical Rules
-1. **Honesty over optimism**: If a project does not need AI, classify AI viability as `NOT_AI`.
-2. **Evidence-based**: Every category and reason must be supported by the user's input.
-3. **Completeness**: Fill all 5 pillars accurately."""
+1. **Architectural Reasoning**: Begin by writing your thorough step-by-step reasoning across each of the 5 pillars inside `<think>...</think>` tags before outputting the final structured JSON object.
+2. **Honesty over optimism**: If a project does not need AI, classify AI viability as `NOT_AI`.
+3. **Evidence-based**: Every category and reason must be supported by the user's input.
+4. **Completeness**: Fill all 5 pillars accurately."""
 
 EXTRACTION_RULES_TEMPLATE = Template(EXTRACTION_RULES)
 

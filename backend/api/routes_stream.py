@@ -27,13 +27,13 @@ from backend.models.SubmissionModel import SubmissionModel
 from backend.models.db_schemes.requirementshub.schemes.submission import Submission
 from backend.nodes.deterministic_score import deterministic_score
 from backend.nodes.fast_track import fast_track
-from backend.nodes.generate_questions import generate_questions
+from backend.nodes.generate_questions import generate_questions, stream_generate_questions
 from backend.nodes.generate_report import (
     build_static_report_markdown,
     generate_report,
     get_feedback_prompts,
 )
-from backend.nodes.llm_analyze import llm_analyze
+from backend.nodes.llm_analyze import llm_analyze, stream_llm_analyze
 from backend.nodes.parse_input import parse_input
 from backend.nodes.rag_search import rag_search
 from backend.nodes.validate_completeness import validate_completeness
@@ -248,13 +248,39 @@ async def _stream_pipeline_execution(
             )
             return
 
-        # ── 4. llm_analyze (Structured Fact Extraction) ─────────────
+        # ── 4. llm_analyze (5-Pillar Fact Extraction) ───────────────
         yield _sse_pack("node", {"node": "llm_analyze", "status": "running"})
         t0 = time.perf_counter()
-        # llm_analyze runs synchronous structured output
         loop = asyncio.get_running_loop()
-        analyze_res = await loop.run_in_executor(None, llm_analyze, state)
-        state.update(analyze_res)
+        analyze_queue = asyncio.Queue()
+
+        def _produce_analyze():
+            try:
+                for chunk in stream_llm_analyze(state):
+                    loop.call_soon_threadsafe(analyze_queue.put_nowait, chunk)
+            except Exception as e:
+                loop.call_soon_threadsafe(analyze_queue.put_nowait, {"type": "error", "error": str(e)})
+            finally:
+                loop.call_soon_threadsafe(analyze_queue.put_nowait, {"type": "done"})
+
+        producer_fut = loop.run_in_executor(None, _produce_analyze)
+
+        while True:
+            item = await analyze_queue.get()
+            if item.get("type") == "done":
+                break
+            elif item.get("type") == "error":
+                logger.error("Error during stream_llm_analyze: %s", item.get("error"))
+                # Fallback to standard execution if streaming errored
+                analyze_res = await loop.run_in_executor(None, llm_analyze, state)
+                state.update(analyze_res)
+                break
+            elif item.get("type") == "thinking":
+                yield _sse_pack("thinking", {"content": item.get("content", "")})
+            elif item.get("type") == "result":
+                state.update(item.get("data", {}))
+
+        await producer_fut
         d_ms = round((time.perf_counter() - t0) * 1000, 1)
 
         extracted = state.get("extracted_facts", {}) or {}
@@ -304,8 +330,35 @@ async def _stream_pipeline_execution(
         if decision == Decision.NEEDS_CLARIFICATION.value and clarification_round < max_clarification_rounds:
             yield _sse_pack("node", {"node": "generate_questions", "status": "running"})
             t0 = time.perf_counter()
-            q_res = await loop.run_in_executor(None, generate_questions, state)
-            state.update(q_res)
+
+            q_queue = asyncio.Queue()
+
+            def _produce_questions():
+                try:
+                    for chunk in stream_generate_questions(state):
+                        loop.call_soon_threadsafe(q_queue.put_nowait, chunk)
+                except Exception as e:
+                    loop.call_soon_threadsafe(q_queue.put_nowait, {"type": "error", "error": str(e)})
+                finally:
+                    loop.call_soon_threadsafe(q_queue.put_nowait, {"type": "done"})
+
+            q_producer_fut = loop.run_in_executor(None, _produce_questions)
+
+            while True:
+                item = await q_queue.get()
+                if item.get("type") == "done":
+                    break
+                elif item.get("type") == "error":
+                    logger.error("Error during stream_generate_questions: %s", item.get("error"))
+                    q_fallback = await loop.run_in_executor(None, generate_questions, state)
+                    state.update(q_fallback)
+                    break
+                elif item.get("type") == "thinking":
+                    yield _sse_pack("thinking", {"content": item.get("content", "")})
+                elif item.get("type") == "result":
+                    state.update(item.get("data", {}))
+
+            await q_producer_fut
             d_ms = round((time.perf_counter() - t0) * 1000, 1)
 
             questions = state.get("clarification_questions", [])
@@ -546,8 +599,34 @@ async def _stream_clarification_execution(
         # ── 4. 5-Pillar Fact Extraction with Clarification Context ───
         yield _sse_pack("node", {"node": "llm_analyze", "status": "running"})
         t0 = time.perf_counter()
-        llm_res = await loop.run_in_executor(None, llm_analyze, state)
-        state.update(llm_res)
+        analyze_queue = asyncio.Queue()
+
+        def _produce_clarification_analyze():
+            try:
+                for chunk in stream_llm_analyze(state):
+                    loop.call_soon_threadsafe(analyze_queue.put_nowait, chunk)
+            except Exception as e:
+                loop.call_soon_threadsafe(analyze_queue.put_nowait, {"type": "error", "error": str(e)})
+            finally:
+                loop.call_soon_threadsafe(analyze_queue.put_nowait, {"type": "done"})
+
+        producer_fut = loop.run_in_executor(None, _produce_clarification_analyze)
+
+        while True:
+            item = await analyze_queue.get()
+            if item.get("type") == "done":
+                break
+            elif item.get("type") == "error":
+                logger.error("Error during clarification stream_llm_analyze: %s", item.get("error"))
+                llm_res = await loop.run_in_executor(None, llm_analyze, state)
+                state.update(llm_res)
+                break
+            elif item.get("type") == "thinking":
+                yield _sse_pack("thinking", {"content": item.get("content", "")})
+            elif item.get("type") == "result":
+                state.update(item.get("data", {}))
+
+        await producer_fut
         d_ms = round((time.perf_counter() - t0) * 1000, 1)
         yield _sse_pack("node", {"node": "llm_analyze", "status": "complete", "duration_ms": d_ms})
 
@@ -583,8 +662,35 @@ async def _stream_clarification_execution(
         if decision == Decision.NEEDS_CLARIFICATION.value and clarification_round < max_clarification_rounds:
             yield _sse_pack("node", {"node": "generate_questions", "status": "running"})
             t0 = time.perf_counter()
-            q_res = await loop.run_in_executor(None, generate_questions, state)
-            state.update(q_res)
+
+            q_queue = asyncio.Queue()
+
+            def _produce_questions_round2():
+                try:
+                    for chunk in stream_generate_questions(state):
+                        loop.call_soon_threadsafe(q_queue.put_nowait, chunk)
+                except Exception as e:
+                    loop.call_soon_threadsafe(q_queue.put_nowait, {"type": "error", "error": str(e)})
+                finally:
+                    loop.call_soon_threadsafe(q_queue.put_nowait, {"type": "done"})
+
+            q_producer_fut = loop.run_in_executor(None, _produce_questions_round2)
+
+            while True:
+                item = await q_queue.get()
+                if item.get("type") == "done":
+                    break
+                elif item.get("type") == "error":
+                    logger.error("Error during stream_generate_questions (round 2): %s", item.get("error"))
+                    q_fallback = await loop.run_in_executor(None, generate_questions, state)
+                    state.update(q_fallback)
+                    break
+                elif item.get("type") == "thinking":
+                    yield _sse_pack("thinking", {"content": item.get("content", "")})
+                elif item.get("type") == "result":
+                    state.update(item.get("data", {}))
+
+            await q_producer_fut
             d_ms = round((time.perf_counter() - t0) * 1000, 1)
 
             questions = state.get("clarification_questions", [])

@@ -18,7 +18,7 @@ import { fetchDepartmentFields, submitRequest, submitRequestWithUpload, pollSubm
 import DepartmentSelector from './DepartmentSelector';
 import SubmissionStream from './SubmissionStream';
 
-export default function SubmissionForm({ departments, onSubmissionSuccess }) {
+export default function SubmissionForm({ departments, onSubmissionSuccess, onOpenClarification }) {
   const [selectedDept, setSelectedDept] = useState('corporate_support');
   const [dynamicFields, setDynamicFields] = useState([]);
   const [loadingFields, setLoadingFields] = useState(false);
@@ -210,6 +210,14 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
       <SubmissionStream
         payload={streamingPayload}
         onComplete={onSubmissionSuccess}
+        onAnswerClarification={(res) => {
+          const reqId = res?.request_id || res?.id;
+          if (onOpenClarification && reqId) {
+            onOpenClarification(reqId);
+          } else {
+            onSubmissionSuccess(res);
+          }
+        }}
         onCancel={() => setStreamingPayload(null)}
       />
     );
