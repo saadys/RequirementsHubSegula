@@ -14,7 +14,7 @@ from backend.services.llm import get_llm
 
 
 FEEDBACK_SYSTEM_PROMPT = (
-    "You are a Senior AI Requirements Architect at Segula Technologies.\n"
+    "We are at Segula Technologies, a global engineering and consulting group.\n"
     "A business team submitted an AI project request that evaluated to 'NO_GO' "
     "(rejected) or stalled in 'NEEDS_CLARIFICATION'. Your job is to provide constructive, "
     "actionable, and empathetic feedback so they know exactly *why* it was not approved "

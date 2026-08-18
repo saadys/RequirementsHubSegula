@@ -46,7 +46,7 @@ def get_generate_questions_messages(state: PipelineState) -> tuple[List[Dict[str
 
     # 2. Build prompt for the clarification LLM
     system_prompt = (
-        "You are a Senior AI Requirements Engineer at Segula Technologies.\n"
+        "We are at Segula Technologies, a global engineering and consulting group.\n"
         "An internal business team submitted an AI project request, but the feasibility evaluation "
         "requires targeted clarification. Your task is to generate 2 to 3 precise, polite, and actionable "
         "clarification questions to resolve the data, scope, or integration ambiguities."
