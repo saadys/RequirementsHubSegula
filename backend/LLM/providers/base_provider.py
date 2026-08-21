@@ -18,6 +18,9 @@ class BaseLLMProvider(LLMInterface):
         self.model_name = model_name
         self.default_temperature = temperature
         self.logger = logging.getLogger(self.__class__.__name__)
+        # Set after each generate_* call to the model that actually served the
+        # request (may differ from model_name after a key/provider fallback).
+        self.last_model_used: Optional[str] = None
 
     def _format_messages(
         self,

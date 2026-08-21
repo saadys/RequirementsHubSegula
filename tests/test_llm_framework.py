@@ -34,10 +34,12 @@ class MockSuccessProvider(BaseLLMProvider):
     def __init__(self):
         super().__init__(model_name="mock-success")
 
-    def generate_text(self, prompt, system_prompt=None, chat_history=None, max_output_tokens=None, temperature=None):
+    async def generate_text(self, prompt, system_prompt=None, chat_history=None, max_output_tokens=None, temperature=None):
+        self.last_model_used = self.model_name
         return "Success"
 
-    def generate_structured_output(self, prompt, response_schema, system_prompt=None, temperature=None):
+    async def generate_structured_output(self, prompt, response_schema, system_prompt=None, temperature=None):
+        self.last_model_used = self.model_name
         if response_schema == CategoricalFactExtraction:
             return CategoricalFactExtraction(
                 ai_viability=PillarAIViability(category="HIGHLY_VIABLE", reason="Clear NLP task"),
@@ -48,7 +50,6 @@ class MockSuccessProvider(BaseLLMProvider):
                 identified_technique="NLP / LLM",
                 project_summary="Valid AI project request.",
             )
-
         elif response_schema == FactExtraction:
             return FactExtraction(
                 has_clear_problem_statement=True,
@@ -76,9 +77,6 @@ class MockSuccessProvider(BaseLLMProvider):
             )
         return response_schema(summary="Mock Result")
 
-
-
-
     def health_check(self) -> bool:
         return True
 
@@ -87,10 +85,10 @@ class MockFailingProvider(BaseLLMProvider):
     def __init__(self):
         super().__init__(model_name="mock-failing")
 
-    def generate_text(self, prompt, system_prompt=None, chat_history=None, max_output_tokens=None, temperature=None):
+    async def generate_text(self, prompt, system_prompt=None, chat_history=None, max_output_tokens=None, temperature=None):
         raise RuntimeError("API Connection Error")
 
-    def generate_structured_output(self, prompt, response_schema, system_prompt=None, temperature=None):
+    async def generate_structured_output(self, prompt, response_schema, system_prompt=None, temperature=None):
         raise RuntimeError("API Connection Error")
 
     def health_check(self) -> bool:
@@ -111,7 +109,6 @@ def test_base_provider_message_formatting():
     assert msgs[1]["content"] == "User prompt"
 
 
-
 def test_gemini_provider_init_and_keys():
     provider = GeminiProvider(model_name="gemini-1.5-flash")
     assert provider.model_name == "gemini/gemini-1.5-flash"
@@ -128,27 +125,29 @@ def test_factory_instantiation():
     assert isinstance(provider, LLMInterface)
 
 
-def test_fallback_provider_success():
+async def test_fallback_provider_success():
     primary = MockSuccessProvider()
     fallback = MockFailingProvider()
     provider = FallbackLLMProvider(primary_provider=primary, fallback_provider=fallback)
 
-    result = provider.generate_text("Hello")
+    result = await provider.generate_text("Hello")
     assert result == "Success"
+    assert provider.last_model_used == "mock-success"
 
-    struct_result = provider.generate_structured_output("Hello", DummySchema)
+    struct_result = await provider.generate_structured_output("Hello", DummySchema)
     assert struct_result.summary == "Mock Result"
 
 
-def test_fallback_provider_fails_over():
+async def test_fallback_provider_fails_over():
     primary = MockFailingProvider()
     fallback = MockSuccessProvider()
     provider = FallbackLLMProvider(primary_provider=primary, fallback_provider=fallback)
 
-    result = provider.generate_text("Hello")
+    result = await provider.generate_text("Hello")
     assert result == "Success"
+    assert provider.last_model_used == "mock-success"
 
-    struct_result = provider.generate_structured_output("Hello", DummySchema)
+    struct_result = await provider.generate_structured_output("Hello", DummySchema)
     assert struct_result.summary == "Mock Result"
 
 
@@ -178,14 +177,14 @@ def test_string_template_builder():
         clarification_answers=["10,000 CVs"],
     )
 
-    assert "Senior AI Feasibility Analyst" in prompt
+    assert "Segula Technologies" in prompt
     assert "Department: HR" in prompt
     assert "CV Matcher" in prompt
     assert "Clarification Round 1" in prompt
 
 
 @patch("backend.nodes.llm_analyze.get_structured_llm")
-def test_llm_analyze_node_integration(mock_get_llm):
+async def test_llm_analyze_node_integration(mock_get_llm):
     from backend.nodes.llm_analyze import llm_analyze
 
     mock_get_llm.return_value = MockSuccessProvider()
@@ -195,14 +194,15 @@ def test_llm_analyze_node_integration(mock_get_llm):
             "problem_description": "We need to parse candidate resumes automatically."
         }
     }
-    result = llm_analyze(state)
+    result = await llm_analyze(state)
     assert "extracted_facts" in result
     assert result["extracted_facts"]["ai_viability"]["category"] == "HIGHLY_VIABLE"
     assert result["extracted_facts"]["identified_technique"] == "NLP / LLM"
+    assert result["extracted_facts_model_used"] == "mock-success"
 
 
 @patch("backend.nodes.generate_questions.get_clarification_llm")
-def test_generate_questions_node_integration(mock_get_llm):
+async def test_generate_questions_node_integration(mock_get_llm):
     from backend.nodes.generate_questions import generate_questions
 
     mock_get_llm.return_value = MockSuccessProvider()
@@ -220,11 +220,11 @@ def test_generate_questions_node_integration(mock_get_llm):
         },
         "clarification_round": 0
     }
-    result = generate_questions(state)
+    result = await generate_questions(state)
     assert "clarification_questions" in result
     assert len(result["clarification_questions"]) == 1
     assert result["clarification_round"] == 1
-
+    assert result["clarification_model_used"] == "mock-success"
 
 
 def test_corporate_support_template_module():
@@ -242,4 +242,3 @@ def test_corporate_support_template_module():
     assert messages[1]["role"] == "user"
     assert "IT Ticket Bot" in messages[1]["content"]
     assert "Human Resources" in messages[0]["content"]
-

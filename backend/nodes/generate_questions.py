@@ -7,7 +7,7 @@ and identified blockers in the extracted facts.
 """
 
 import json
-from typing import Any, Dict, Iterator, List
+from typing import Any, AsyncIterator, Dict, List
 from backend.contracts.state import PipelineState
 from backend.schemas import ClarificationQuestionsModel
 from backend.services.llm import get_clarification_llm
@@ -85,13 +85,13 @@ def _build_fallback_questions(gaps: List[str]) -> List[Dict[str, str]]:
     return fallback
 
 
-def stream_generate_questions(state: PipelineState) -> Iterator[Dict[str, Any]]:
+async def stream_generate_questions(state: PipelineState) -> AsyncIterator[Dict[str, Any]]:
     """Streams clarification question thinking tokens in real-time and yields final questions."""
     messages, gaps = get_generate_questions_messages(state)
     current_round = state.get("clarification_round", 0)
     llm = get_clarification_llm()
 
-    for event in llm.generate_structured_output_stream(
+    async for event in llm.generate_structured_output_stream(
         prompt=messages,
         response_schema=ClarificationQuestionsModel,
     ):
@@ -107,16 +107,17 @@ def stream_generate_questions(state: PipelineState) -> Iterator[Dict[str, Any]]:
                 "data": {
                     "clarification_questions": questions_payload,
                     "clarification_round": current_round + 1,
+                    "clarification_model_used": getattr(llm, "last_model_used", None),
                 },
             }
 
 
-def generate_questions(state: PipelineState) -> dict:
+async def generate_questions(state: PipelineState) -> dict:
     """Node that generates targeted clarification questions based on weak pillars and gaps."""
     messages, gaps = get_generate_questions_messages(state)
     current_round = state.get("clarification_round", 0)
     llm = get_clarification_llm()
-    result: ClarificationQuestionsModel = llm.generate_structured_output(
+    result: ClarificationQuestionsModel = await llm.generate_structured_output(
         prompt=messages,
         response_schema=ClarificationQuestionsModel,
     )
@@ -127,5 +128,5 @@ def generate_questions(state: PipelineState) -> dict:
     return {
         "clarification_questions": questions_payload,
         "clarification_round": current_round + 1,
+        "clarification_model_used": getattr(llm, "last_model_used", None),
     }
-

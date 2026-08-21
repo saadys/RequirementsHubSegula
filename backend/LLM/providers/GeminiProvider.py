@@ -5,7 +5,7 @@ Concrete provider for Google Gemini models with multi-key round robin and Pydant
 """
 
 import time
-from typing import Dict, Iterator, List, Optional, Type
+from typing import AsyncIterator, Dict, List, Optional, Type
 from pydantic import BaseModel
 import litellm
 
@@ -26,19 +26,25 @@ class GeminiProvider(BaseLLMProvider):
         if not self.api_keys:
             self.api_keys = ["dummy-key"]
 
-    def _execute_with_keys(self, func, **kwargs):
-        """Executes API call, switching keys if rate limit / quota is exceeded."""
+    async def _execute_with_keys(self, func, **kwargs):
+        """Executes API call, switching keys if rate limit / quota is exceeded.
+
+        Each key already retries transient errors internally (see
+        litellm num_retries/retry_strategy below) before being abandoned,
+        so a key switch here means that key is genuinely unusable
+        (quota exhausted, invalid, or retries exhausted).
+        """
         last_exception = None
         for key in self.api_keys:
             try:
-                return func(api_key=key, **kwargs)
+                return await func(api_key=key, **kwargs)
             except Exception as e:
                 self.logger.warning("Gemini API key failed (%s). Trying next key...", e)
                 last_exception = e
         if last_exception:
             raise last_exception
 
-    def generate_text(
+    async def generate_text(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
@@ -49,14 +55,17 @@ class GeminiProvider(BaseLLMProvider):
         messages = self._format_messages(prompt=prompt, system_prompt=system_prompt)
         temp = temperature if temperature is not None else self.default_temperature
 
-        def _call(api_key: str):
+        async def _call(api_key: str):
             start_time = time.perf_counter()
-            response = litellm.completion(
+            response = await litellm.acompletion(
                 model=self.model_name,
                 messages=messages,
                 temperature=temp,
                 max_tokens=max_output_tokens,
                 api_key=api_key,
+                num_retries=config.LLM_MAX_RETRIES,
+                retry_strategy="exponential_backoff_retry",
+                retry_after=config.LLM_RETRY_BASE_DELAY_SECONDS,
             )
             duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
             usage = getattr(response, "usage", None)
@@ -72,25 +81,26 @@ class GeminiProvider(BaseLLMProvider):
                 completion_tokens,
                 total_tokens,
             )
+            self.last_model_used = self.model_name
             return response.choices[0].message.content
 
-        return self._execute_with_keys(_call)
+        return await self._execute_with_keys(_call)
 
-    def generate_text_stream(
+    async def generate_text_stream(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
         chat_history: Optional[List[Dict[str, str]]] = None,
         max_output_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ) -> Iterator[Dict[str, str]]:
+    ) -> AsyncIterator[Dict[str, str]]:
         messages = self._format_messages(prompt=prompt, system_prompt=system_prompt)
         temp = temperature if temperature is not None else self.default_temperature
 
         last_exception = None
         for key in self.api_keys:
             try:
-                response = litellm.completion(
+                response = await litellm.acompletion(
                     model=self.model_name,
                     messages=messages,
                     temperature=temp,
@@ -100,7 +110,7 @@ class GeminiProvider(BaseLLMProvider):
                     timeout=60,
                 )
                 start_time = time.perf_counter()
-                for chunk in response:
+                async for chunk in response:
                     if chunk.choices and chunk.choices[0].delta:
                         content = getattr(chunk.choices[0].delta, "content", "") or ""
                         if content:
@@ -111,6 +121,7 @@ class GeminiProvider(BaseLLMProvider):
                     self.model_name,
                     duration_ms,
                 )
+                self.last_model_used = self.model_name
                 return
             except Exception as e:
                 self.logger.warning("Gemini API key failed during stream (%s). Trying next key...", e)
@@ -119,7 +130,7 @@ class GeminiProvider(BaseLLMProvider):
         if last_exception:
             raise last_exception
 
-    def generate_structured_output(
+    async def generate_structured_output(
         self,
         prompt: str | List[Dict[str, str]],
         response_schema: Type[T],
@@ -129,14 +140,17 @@ class GeminiProvider(BaseLLMProvider):
         messages = self._format_messages(prompt=prompt, system_prompt=system_prompt)
         temp = temperature if temperature is not None else self.default_temperature
 
-        def _call(api_key: str):
+        async def _call(api_key: str):
             start_time = time.perf_counter()
-            response = litellm.completion(
+            response = await litellm.acompletion(
                 model=self.model_name,
                 messages=messages,
                 temperature=temp,
                 response_format=response_schema,
                 api_key=api_key,
+                num_retries=config.LLM_MAX_RETRIES,
+                retry_strategy="exponential_backoff_retry",
+                retry_after=config.LLM_RETRY_BASE_DELAY_SECONDS,
             )
             duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
             usage = getattr(response, "usage", None)
@@ -153,10 +167,11 @@ class GeminiProvider(BaseLLMProvider):
                 completion_tokens,
                 total_tokens,
             )
+            self.last_model_used = self.model_name
             content = response.choices[0].message.content
             return response_schema.model_validate_json(content)
 
-        return self._execute_with_keys(_call)
+        return await self._execute_with_keys(_call)
 
     def health_check(self) -> bool:
         return len(self.api_keys) > 0 and self.api_keys[0] != "dummy-key"

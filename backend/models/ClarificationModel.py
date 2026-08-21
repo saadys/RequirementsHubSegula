@@ -28,6 +28,7 @@ class ClarificationModel(BaseDataModel):
         round_number: int,
         questions: list[str] | list[dict],
         answers: list[str] | None = None,
+        llm_model_used: str | None = None,
     ) -> ClarificationRound:
         """Create a new clarification round for a submission."""
         uid = to_uuid(submission_id)
@@ -38,6 +39,7 @@ class ClarificationModel(BaseDataModel):
             round_number=round_number,
             questions=questions,
             answers=answers or [],
+            llm_model_used=llm_model_used,
         )
         return await self.save_and_return(round_)
 

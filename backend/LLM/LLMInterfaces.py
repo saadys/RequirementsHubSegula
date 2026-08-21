@@ -5,7 +5,7 @@ Defines the abstract contract (LLMInterface) that all LLM providers must impleme
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, AsyncGenerator, Dict, Iterator, List, Optional, Type, TypeVar
+from typing import Any, AsyncGenerator, AsyncIterator, Dict, Iterator, List, Optional, Type, TypeVar
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
@@ -15,7 +15,7 @@ class LLMInterface(ABC):
     """Abstract Base Class for LLM Providers."""
 
     @abstractmethod
-    def generate_text(
+    async def generate_text(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
@@ -26,19 +26,19 @@ class LLMInterface(ABC):
         """Generates standard un-structured text response from the LLM."""
         pass
 
-    def generate_text_stream(
+    async def generate_text_stream(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
         chat_history: Optional[List[Dict[str, str]]] = None,
         max_output_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-    ) -> Iterator[Dict[str, str]]:
+    ) -> AsyncIterator[Dict[str, str]]:
         """Generates streamed text chunks or thinking events from the LLM.
         
         Yields dicts with format: {'type': 'token' | 'thinking', 'content': str}
         """
-        full_text = self.generate_text(
+        full_text = await self.generate_text(
             prompt=prompt,
             system_prompt=system_prompt,
             chat_history=chat_history,
@@ -48,7 +48,7 @@ class LLMInterface(ABC):
         yield {"type": "token", "content": full_text}
 
     @abstractmethod
-    def generate_structured_output(
+    async def generate_structured_output(
         self,
         prompt: str | List[Dict[str, str]],
         response_schema: Type[T],
@@ -58,20 +58,20 @@ class LLMInterface(ABC):
         """Generates structured output validated against a Pydantic schema."""
         pass
 
-    def generate_structured_output_stream(
+    async def generate_structured_output_stream(
         self,
         prompt: str | List[Dict[str, str]],
         response_schema: Type[T],
         system_prompt: Optional[str] = None,
         temperature: Optional[float] = None,
-    ) -> Iterator[Dict[str, Any]]:
+    ) -> AsyncIterator[Dict[str, Any]]:
         """Generates structured output while streaming intermediate thinking tokens.
         
         Yields dicts with format:
           - {'type': 'thinking', 'content': str}
           - {'type': 'result', 'data': T} (the final validated Pydantic model)
         """
-        result = self.generate_structured_output(
+        result = await self.generate_structured_output(
             prompt=prompt,
             response_schema=response_schema,
             system_prompt=system_prompt,

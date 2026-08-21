@@ -37,6 +37,11 @@ OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 LOCAL_MODEL = os.getenv("LOCAL_MODEL", "ollama/qwen3:8b")
 LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
 
+# Retry (transient errors only: rate limits, timeouts, 5xx) before a key
+# rotation (Gemini) or a provider fallback (FallbackLLMProvider) kicks in.
+LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
+LLM_RETRY_BASE_DELAY_SECONDS = float(os.getenv("LLM_RETRY_BASE_DELAY_SECONDS", "1"))
+
 # ========================= Scoring Thresholds =========================
 
 SCORE_GO_THRESHOLD = int(os.getenv("SCORE_GO_THRESHOLD", "70"))
