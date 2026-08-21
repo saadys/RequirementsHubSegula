@@ -55,7 +55,7 @@ async def get_clarification_questions(request_id: str, db: AsyncSession = Depend
             detail=f"Submission '{request_id}' not found",
         )
 
-    rounds = sub.clarification_rounds or []
+    rounds = sorted(sub.clarification_rounds or [], key=lambda r: r.round_number)
     latest_round = rounds[-1] if rounds else None
     round_num = latest_round.round_number if latest_round else 0
     has_answered = bool(latest_round and latest_round.answers and len(latest_round.answers) > 0)
@@ -126,7 +126,7 @@ async def submit_clarification_answers(
         )
 
     clar_model = ClarificationModel(db)
-    rounds = sub.clarification_rounds or []
+    rounds = sorted(sub.clarification_rounds or [], key=lambda r: r.round_number)
     latest_round = rounds[-1] if rounds else None
     curr_round_num = latest_round.round_number if latest_round else 1
 
@@ -136,13 +136,19 @@ async def submit_clarification_answers(
             detail=f"Clarification rounds ({MAX_CLARIFICATION_ROUNDS}/{MAX_CLARIFICATION_ROUNDS}) have already been completed for this submission.",
         )
 
-    existing_answers = list(latest_round.answers) if (latest_round and latest_round.answers) else []
-    existing_answers.extend(payload.answers)
-
     if latest_round:
-        await clar_model.update_answers(request_id, curr_round_num, existing_answers)
+        await clar_model.update_answers(request_id, curr_round_num, payload.answers)
     else:
-        await clar_model.create_round(request_id, round_number=1, questions=[], answers=existing_answers)
+        await clar_model.create_round(request_id, round_number=1, questions=[], answers=payload.answers)
+
+    # Collect all historical questions and answers across rounds
+    all_questions = []
+    all_answers = []
+    for r in rounds:
+        r_q = r.questions or []
+        r_a = payload.answers if r.round_number == curr_round_num else (r.answers or [])
+        all_questions.extend(r_q)
+        all_answers.extend(r_a)
 
     form_dict = {
         "project_name": sub.project_name,
@@ -162,8 +168,8 @@ async def submit_clarification_answers(
         "form_data": form_dict,
         "department": sub.department_id or "corporate_support",
         "clarification_round": curr_round_num,
-        "clarification_answers": existing_answers,
-        "clarification_questions": latest_round.questions if latest_round else [],
+        "clarification_answers": all_answers,
+        "clarification_questions": all_questions,
     }
 
     graph = get_compiled_graph()

@@ -12,12 +12,13 @@ import {
   Check
 } from 'lucide-react';
 import { fetchClarification, submitClarification } from '../api/client';
+import SubmissionStream from './SubmissionStream';
 
 export default function ClarificationLoop({ requestId, onClarificationComplete, onBack }) {
   const [data, setData] = useState(null);
   const [answersMap, setAnswersMap] = useState({});
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [streamingAnswers, setStreamingAnswers] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -53,7 +54,7 @@ export default function ClarificationLoop({ requestId, onClarificationComplete, 
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     setError(null);
 
@@ -71,16 +72,32 @@ export default function ClarificationLoop({ requestId, onClarificationComplete, 
       return;
     }
 
-    try {
-      setSubmitting(true);
-      const updatedResult = await submitClarification(requestId, answersArray);
-      onClarificationComplete(updatedResult);
-    } catch (err) {
-      setError(err.message || 'Failed to submit clarification answers.');
-    } finally {
-      setSubmitting(false);
-    }
+    // Switch to real-time streaming re-evaluation mode
+    setStreamingAnswers(answersArray);
   };
+
+  if (streamingAnswers) {
+    return (
+      <SubmissionStream
+        clarificationRequestId={requestId}
+        clarificationAnswers={streamingAnswers}
+        onComplete={(res) => {
+          onClarificationComplete(res);
+        }}
+        onAnswerClarification={(res) => {
+          setStreamingAnswers(null);
+          setData(res);
+          const qList = res?.questions || res?.clarification_questions || [];
+          const initialAnswers = {};
+          qList.forEach((_, idx) => {
+            initialAnswers[idx] = '';
+          });
+          setAnswersMap(initialAnswers);
+        }}
+        onCancel={() => setStreamingAnswers(null)}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -186,8 +203,11 @@ export default function ClarificationLoop({ requestId, onClarificationComplete, 
       ) : (
         <form onSubmit={handleSubmit}>
           {questionsList.length === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', color: '#94A3B8' }}>
-              No additional questions required. Your project status is set to evaluated.
+            <div style={{ padding: '32px', textAlign: 'center', color: '#94A3B8' }}>
+              <p style={{ marginBottom: '16px' }}>No active clarification questions required. Your project evaluation is complete.</p>
+              <button type="button" className="btn-secondary" onClick={onBack} style={{ margin: '0 auto' }}>
+                <ArrowLeft size={16} /> Return to Project Summary
+              </button>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '28px' }}>
@@ -251,18 +271,9 @@ export default function ClarificationLoop({ requestId, onClarificationComplete, 
             <button
               type="submit"
               className="btn-primary"
-              disabled={submitting}
               style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '1rem', background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)' }}
             >
-              {submitting ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" /> Submitting Responses & Re-evaluating LangGraph Pipeline...
-                </>
-              ) : (
-                <>
-                  <Send size={18} /> Submit Answers & Re-evaluate Feasibility Score
-                </>
-              )}
+              <Send size={18} /> Submit Answers & Stream Re-evaluation
             </button>
           )}
         </form>

@@ -17,10 +17,10 @@ class PillarAIViability(BaseModel):
     category: Literal["HIGHLY_VIABLE", "MARGINAL", "NOT_AI", "IMPOSSIBLE"] = Field(
         ...,
         description=(
-            "HIGHLY_VIABLE: Clear ML/NLP/CV automation.\n"
-            "MARGINAL: Commodity task where standard commercial API or existing software is better.\n"
-            "NOT_AI: Solvable with Python script, SQL query, cron job, or hardware cooling/replacement.\n"
-            "IMPOSSIBLE: Defies physics, math, or causality (e.g. 100% lottery prediction, sentient AGI)."
+            "HIGHLY_VIABLE: The requested business capability is fundamentally well-suited to AI, established techniques can plausibly achieve the required outcome, and AI provides meaningful value compared with deterministic or conventional software..\n"
+            "MARGINAL: AI can technically be used, but conventional software, SaaS, rules, or simpler analytics are likely to achieve the business objective more reliably, cheaply, or transparently...\n"
+            "NOT_AI: The requested outcome is fundamentally deterministic and does not require prediction, inference, generation, perception, or learning.\n"
+            "IMPOSSIBLE: Defies physics, math, causality, or The requested outcome cannot reasonably be achieved with current AI capabilities or the stated constraints.."
         )
     )
     reason: str = Field(..., description="1-2 sentences technical justification.")
@@ -30,9 +30,13 @@ class PillarDataReadiness(BaseModel):
     category: Literal["READY", "UNLABELED_OR_MESSY", "NONE"] = Field(
         ...,
         description=(
-            "READY: Structured, labeled, accessible data (SQL, clean PDFs, annotated images).\n"
-            "UNLABELED_OR_MESSY: Raw data exists in bulk but lacks annotations/labels.\n"
-            "NONE: No data exists yet or it is scattered on personal laptops without access."
+            "READY: Relevant data is demonstrably accessible, sufficiently structured/clean "
+            "for the proposed approach, and the required labels or target variables exist "
+            "when supervised learning is required.\n"
+            "UNLABELED_OR_MESSY: Relevant data exists, but labels, structure, quality, "
+            "access rights, completeness, or other requirements needed for the proposed "
+            "approach are missing or unconfirmed.\n"
+            "NONE: No data exists yet or it is scattered on personal laptops without access permissions or the user does not have the permission to access the data or he dont answer the data description in a logical way"
         )
     )
     reason: str = Field(..., description="1-2 sentences data readiness assessment.")
@@ -42,8 +46,8 @@ class PillarProblemClarity(BaseModel):
     category: Literal["CLEAR", "PARTIAL", "CONTRADICTORY", "VAGUE"] = Field(
         ...,
         description=(
-            "CLEAR: Concrete workflow, defined inputs/outputs, and measurable KPIs.\n"
-            "PARTIAL: Clear intent but missing volume, format, or success threshold.\n"
+            "CLEAR: Concrete workflow, defined inputs/outputs, explicit pain point, and measurable KPIs , ONLY IF THE USER STATED ALL OF THIS THEN ITS CLEAR IF SOMETHING IS MISSING FROM THESE 4 ITS PARTIAL.\n"
+            "PARTIAL: Clear business intent but missing volume, format, or success threshold , any missing clarification from the user of this (Concrete workflow, defined inputs/outputs, explicit pain point, and measurable KPIs ) its considered partial , all of them needs to be present to be considered clear.\n"
             "CONTRADICTORY: Contains mutually exclusive requirements (e.g. 100% autonomous with 100% human approval).\n"
             "VAGUE: Pure buzzwords with no concrete business process."
         )
@@ -67,9 +71,9 @@ class PillarGovernance(BaseModel):
     category: Literal["SAFE", "MODERATE_RISK", "CRITICAL_RISK"] = Field(
         ...,
         description=(
-            "SAFE: Standard internal business data with no compliance/privacy issues.\n"
-            "MODERATE_RISK: Needs privacy review, GDPR consent, or human oversight.\n"
-            "CRITICAL_RISK: Phishing tool, credential harvesting, unauthorized employee surveillance, illegal intent."
+            "SAFE: No meaningful privacy, security, safety, legal, or ethical concerns are evident..\n"
+            "MODERATE_RISK: Contains personal/internal data or requires meaningful human oversight, but there is no evident prohibited use, high-impact profiling, surveillance, sensitive inference, or serious legal/compliance concern. IF THE USER DO NOT SPECIFY HOW TO HANDLE THE RISK DO NOT ASSUME POSITIVELY , IF ITS CRITICAL ITS CRITICAL IF THERE ARE NO SOLUTIONS TO HANDLE IT WITH COMPLIANCE TO General Data Protection Regulation flag it directly to critical , if there is a solution flag it as moderate\n"
+            "CRITICAL_RISK: The described use case involves prohibited activity, unauthorized surveillance, sensitive profiling/inference of individuals, high-impact employment decisions based on personal data, serious privacy violations, illegal activity, or other substantial legal/ethical risk.."
         )
     )
     reason: str = Field(..., description="1-2 sentences governance and compliance assessment.")
@@ -77,7 +81,7 @@ class PillarGovernance(BaseModel):
 
 class CategoricalFactExtraction(BaseModel):
     project_summary: str = Field(..., description="2-3 sentences concise technical summary of the submission.")
-    identified_technique: str = Field(..., description="Recommended technical approach (e.g., 'OCR + Fuzzy Matching', 'RAG', 'Standard Python ETL Script').")
+    identified_technique: str = Field(..., description="Recommended technical approach (e.g., 'OCR + Fuzzy Matching', 'RAG', 'Standard Python ETL Script') , 'LLM + Agentic Workflow', etc.")
     ai_viability: PillarAIViability
     data_readiness: PillarDataReadiness
     problem_clarity: PillarProblemClarity
@@ -87,8 +91,14 @@ class CategoricalFactExtraction(BaseModel):
 
 class QuestionItem(BaseModel):
     question: str
-    target_pillar: str
-    technical_reasoning: str
+    target_pillar: str = Field(
+        default="problem_clarity",
+        description="Target pillar or requirement category (e.g. data_readiness, problem_clarity, integration, governance)",
+    )
+    technical_reasoning: str = Field(
+        default="Required to resolve scope and technical feasibility ambiguities.",
+        description="Technical rationale for why this clarification is needed",
+    )
 
 
 class ClarificationQuestionsModel(BaseModel):
