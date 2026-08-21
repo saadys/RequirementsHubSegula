@@ -24,7 +24,7 @@ from backend.schemas import FactExtraction
 from backend.graph.builder import get_compiled_graph
 
 
-def run_e2e_local_llm_test():
+async def run_e2e_local_llm_test():
     print("=" * 70)
     print("  REQUIREMENTS HUB SEGULA - END-TO-END LOCAL LLM (OLLAMA) TEST")
     print("=" * 70)
@@ -56,7 +56,7 @@ def run_e2e_local_llm_test():
 
     print("  -> Invoking generate_structured_output(FactExtraction)...")
     t0 = time.time()
-    fact_result: FactExtraction = provider.generate_structured_output(
+    fact_result: FactExtraction = await provider.generate_structured_output(
         prompt=prompt,
         response_schema=FactExtraction
     )
@@ -104,9 +104,8 @@ def run_e2e_local_llm_test():
         "clarification_answers": []
     }
 
-    import asyncio
     t0 = time.time()
-    result_state = asyncio.run(graph.ainvoke(submission_state))
+    result_state = await graph.ainvoke(submission_state)
     t_pipeline = round(time.time() - t0, 2)
 
     print("\n" + "=" * 70)
@@ -143,4 +142,6 @@ def run_e2e_local_llm_test():
 
 
 if __name__ == "__main__":
-    run_e2e_local_llm_test()
+    import asyncio
+
+    asyncio.run(run_e2e_local_llm_test())

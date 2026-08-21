@@ -6,7 +6,7 @@ Tracks clarification Q&A iterations between the LLM and the business user.
 """
 
 import uuid
-from sqlalchemy import Integer, ForeignKey, JSON
+from sqlalchemy import Integer, String, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -33,6 +33,9 @@ class ClarificationRound(Base):
     # JSONB arrays
     questions: Mapped[list] = mapped_column(JSON_TYPE, nullable=False, default=list)
     answers: Mapped[list] = mapped_column(JSON_TYPE, nullable=False, default=list)
+
+    # Provider/model that generated these clarification questions (governance trail).
+    llm_model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[str | None] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=True

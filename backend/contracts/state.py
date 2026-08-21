@@ -30,11 +30,13 @@ class PipelineState(TypedDict, total=False):
 
     # ── LLM Analysis (Track A writes, Track B scoring reads) ─────
     extracted_facts: dict | None             # FactExtraction as dict
+    extracted_facts_model_used: str | None   # Model that actually produced extracted_facts (may differ from PRIMARY_MODEL after fallback)
 
     # ── Clarification (both tracks interact) ─────────────────────
     clarification_round: int                 # Starts at 0, max 2
     clarification_questions: list[str]       # AI-generated questions
     clarification_answers: list[str]         # Team's answers
+    clarification_model_used: str | None     # Model that actually generated clarification_questions
 
     # ── Scoring (Track B writes, report reads) ───────────────────
     score: int                               # 0-100

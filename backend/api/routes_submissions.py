@@ -33,10 +33,10 @@ router = APIRouter(prefix="/submissions", tags=["Submissions"])
 def entity_to_submission_response(sub: Submission) -> SubmissionResponse:
     """Converts a Submission ORM instance and its loaded relations into a SubmissionResponse Pydantic model."""
     scoring = sub.scoring_result
-    fact = sub.fact_extraction
     rep = sub.report
     clar_rounds = sorted(sub.clarification_rounds or [], key=lambda r: r.round_number)
     overrides = sub.reviewer_overrides or []
+    fact = sub.fact_extraction
 
     latest_round = clar_rounds[-1] if clar_rounds else None
     round_num = latest_round.round_number if latest_round else 0
@@ -88,7 +88,7 @@ def entity_to_submission_response(sub: Submission) -> SubmissionResponse:
         veto_triggered=veto_triggered,
         veto_reasons=veto_reasons,
         report_type=rep.report_type if rep else None,
-        missing_fields=fact.extracted_requirements if (fact and fact.extracted_requirements) else [],
+        missing_fields=sub.missing_fields or (fact.extracted_requirements if (fact and fact.extracted_requirements) else []),
         clarification_questions=active_questions,
         clarification_round=round_num,
         max_rounds=MAX_CLARIFICATION_ROUNDS,
@@ -143,10 +143,18 @@ async def _execute_pipeline_in_background(
             report_model = ReportModel(db)
             clar_model = ClarificationModel(db)
 
+            if result_state.get("missing_fields"):
+                await sub_model.update_fields(
+                    request_id, {"missing_fields": result_state.get("missing_fields") or []}
+                )
+
             if result_state.get("extracted_facts"):
+                facts_payload = dict(result_state.get("extracted_facts") or {})
+                if result_state.get("extracted_facts_model_used"):
+                    facts_payload["llm_model_used"] = result_state.get("extracted_facts_model_used")
                 await fact_model.create_or_update(
                     request_id,
-                    result_state.get("extracted_facts") or {},
+                    facts_payload,
                 )
 
             if result_state.get("score") is not None or result_state.get("decision"):
@@ -185,11 +193,11 @@ async def _execute_pipeline_in_background(
                     round_number=result_state.get("clarification_round", 1),
                     questions=result_state.get("clarification_questions", []),
                     answers=result_state.get("clarification_answers", []),
+                    llm_model_used=result_state.get("clarification_model_used"),
                 )
 
             # Update status to completed/needs_clarification at the very end after all child records are committed
             await sub_model.update_status(request_id, status_str)
-
 
         logger.info(f"Background task finished for request {request_id}. Status: {status_str}")
     except Exception as e:

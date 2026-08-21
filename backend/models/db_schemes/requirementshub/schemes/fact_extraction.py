@@ -67,6 +67,12 @@ class FactExtraction(Base):
     integration_complexity: Mapped[str | None] = mapped_column(String(20), nullable=True)
     estimated_effort: Mapped[str | None] = mapped_column(String(20), nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Provider/model that actually produced this extraction (e.g. "gemini/gemini-3.1-flash-lite",
+    # "openai/gpt-4o" after a silent fallback). Governance trail for GO/NO-GO decisions.
+    llm_model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # JSONB arrays
     extracted_requirements: Mapped[list] = mapped_column(JSON_TYPE, nullable=False, default=list)
     risks_identified: Mapped[list] = mapped_column(JSON_TYPE, nullable=False, default=list)
 

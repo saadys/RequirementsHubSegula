@@ -11,6 +11,17 @@ from backend import config
 from backend.LLM.providers.base_provider import BaseLLMProvider
 from backend.LLM.LLMInterfaces import T
 
+# Transient errors worth retrying (rate limits, timeouts, transient server errors).
+# Auth/permission/invalid-request errors are not retried — retrying them wastes
+# time and masks the real failure.
+_RETRYABLE_EXCEPTIONS = (
+    litellm.RateLimitError,
+    litellm.Timeout,
+    litellm.APIConnectionError,
+    litellm.InternalServerError,
+    litellm.ServiceUnavailableError,
+)
+
 
 class OpenAIProvider(BaseLLMProvider):
     """OpenAI Provider supporting text generation and Pydantic structured outputs."""
@@ -20,7 +31,7 @@ class OpenAIProvider(BaseLLMProvider):
         super().__init__(model_name=clean_model, temperature=temperature)
         self.api_key = config.OPENAI_API_KEY
 
-    def generate_text(
+    async def generate_text(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
@@ -31,16 +42,20 @@ class OpenAIProvider(BaseLLMProvider):
         messages = self._format_messages(prompt=prompt, system_prompt=system_prompt)
         temp = temperature if temperature is not None else self.default_temperature
 
-        response = litellm.completion(
+        response = await litellm.acompletion(
             model=self.model_name,
             messages=messages,
             temperature=temp,
             max_tokens=max_output_tokens,
             api_key=self.api_key,
+            num_retries=config.LLM_MAX_RETRIES,
+            retry_strategy="exponential_backoff_retry",
+            retry_after=config.LLM_RETRY_BASE_DELAY_SECONDS,
         )
+        self.last_model_used = self.model_name
         return response.choices[0].message.content
 
-    def generate_structured_output(
+    async def generate_structured_output(
         self,
         prompt: str | List[Dict[str, str]],
         response_schema: Type[T],
@@ -50,13 +65,17 @@ class OpenAIProvider(BaseLLMProvider):
         messages = self._format_messages(prompt=prompt, system_prompt=system_prompt)
         temp = temperature if temperature is not None else self.default_temperature
 
-        response = litellm.completion(
+        response = await litellm.acompletion(
             model=self.model_name,
             messages=messages,
             temperature=temp,
             response_format=response_schema,
             api_key=self.api_key,
+            num_retries=config.LLM_MAX_RETRIES,
+            retry_strategy="exponential_backoff_retry",
+            retry_after=config.LLM_RETRY_BASE_DELAY_SECONDS,
         )
+        self.last_model_used = self.model_name
         content = response.choices[0].message.content
         return response_schema.model_validate_json(content)
 

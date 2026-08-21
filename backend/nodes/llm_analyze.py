@@ -7,7 +7,7 @@ business team's request. Uses department-specific prompts and RAG context.
 Owner: Track A
 """
 
-from typing import Any, Dict, Iterator
+from typing import Any, AsyncIterator, Dict
 from backend.contracts.state import PipelineState
 from backend.schemas import CategoricalFactExtraction
 from backend.services.llm import get_structured_llm
@@ -54,11 +54,11 @@ def get_llm_analyze_messages(state: PipelineState) -> list:
     )
 
 
-def stream_llm_analyze(state: PipelineState) -> Iterator[Dict[str, Any]]:
+async def stream_llm_analyze(state: PipelineState) -> AsyncIterator[Dict[str, Any]]:
     """Streams 5-pillar reasoning tokens in real-time and yields final extracted facts."""
     messages = get_llm_analyze_messages(state)
     llm = get_structured_llm()
-    for event in llm.generate_structured_output_stream(
+    async for event in llm.generate_structured_output_stream(
         prompt=messages,
         response_schema=CategoricalFactExtraction,
     ):
@@ -69,20 +69,22 @@ def stream_llm_analyze(state: PipelineState) -> Iterator[Dict[str, Any]]:
             yield {
                 "type": "result",
                 "data": {
-                    "extracted_facts": extracted.model_dump() if hasattr(extracted, "model_dump") else extracted
+                    "extracted_facts": extracted.model_dump() if hasattr(extracted, "model_dump") else extracted,
+                    "extracted_facts_model_used": getattr(llm, "last_model_used", None),
                 },
             }
 
 
-def llm_analyze(state: PipelineState) -> dict:
+async def llm_analyze(state: PipelineState) -> dict:
     """Node that invokes the structured LLM to extract 5-pillar categorical facts from the request."""
     messages = get_llm_analyze_messages(state)
     llm = get_structured_llm()
-    result: CategoricalFactExtraction = llm.generate_structured_output(
+    result: CategoricalFactExtraction = await llm.generate_structured_output(
         prompt=messages,
         response_schema=CategoricalFactExtraction,
     )
 
     return {
-        "extracted_facts": result.model_dump()
+        "extracted_facts": result.model_dump(),
+        "extracted_facts_model_used": getattr(llm, "last_model_used", None),
     }

@@ -4,7 +4,8 @@ import pytest
 from backend.nodes.llm_analyze import llm_analyze
 
 
-def test_llm_analyze_valid_fact_extraction():
+@pytest.mark.asyncio
+async def test_llm_analyze_valid_fact_extraction():
     """Test that llm_analyze produces a valid CategoricalFactExtraction dictionary for realistic input."""
     state = {
         "form_data": {
@@ -24,7 +25,7 @@ def test_llm_analyze_valid_fact_extraction():
     }
 
     # Run LLM analyze
-    result = llm_analyze(state)
+    result = await llm_analyze(state)
     assert "extracted_facts" in result
     facts = result["extracted_facts"]
     assert facts is not None
@@ -51,4 +52,3 @@ def test_llm_analyze_valid_fact_extraction():
     assert "identified_technique" in facts
     assert "project_summary" in facts
     assert len(facts["project_summary"]) > 5
-
