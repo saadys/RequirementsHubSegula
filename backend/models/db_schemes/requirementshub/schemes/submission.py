@@ -70,7 +70,7 @@ class Submission(Base):
         back_populates="submission", uselist=False, cascade="all, delete-orphan"
     )
     clarification_rounds: Mapped[list["ClarificationRound"]] = relationship(
-        back_populates="submission", cascade="all, delete-orphan"
+        back_populates="submission", cascade="all, delete-orphan", order_by="ClarificationRound.round_number"
     )
     report: Mapped["Report | None"] = relationship(
         back_populates="submission", uselist=False, cascade="all, delete-orphan"

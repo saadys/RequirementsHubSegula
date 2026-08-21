@@ -11,17 +11,21 @@ import {
   HelpCircle, 
   AlertCircle,
   Clock,
-  Sparkles
+  Sparkles,
+  Zap
 } from 'lucide-react';
 import { fetchDepartmentFields, submitRequest, submitRequestWithUpload, pollSubmissionUntilComplete } from '../api/client';
 import DepartmentSelector from './DepartmentSelector';
+import SubmissionStream from './SubmissionStream';
 
-export default function SubmissionForm({ departments, onSubmissionSuccess }) {
+export default function SubmissionForm({ departments, onSubmissionSuccess, onOpenClarification }) {
   const [selectedDept, setSelectedDept] = useState('corporate_support');
   const [dynamicFields, setDynamicFields] = useState([]);
   const [loadingFields, setLoadingFields] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [streamMode, setStreamMode] = useState(true);
+  const [streamingPayload, setStreamingPayload] = useState(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -167,6 +171,12 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
       department: selectedDept,
     };
 
+    // If Real-Time Streaming is active (and no PDF file upload attached), stream directly
+    if (streamMode && !attachedFile) {
+      setStreamingPayload(payload);
+      return;
+    }
+
     try {
       setSubmitting(true);
       let result;
@@ -194,6 +204,24 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
       setSubmitting(false);
     }
   };
+
+  if (streamingPayload) {
+    return (
+      <SubmissionStream
+        payload={streamingPayload}
+        onComplete={onSubmissionSuccess}
+        onAnswerClarification={(res) => {
+          const reqId = res?.request_id || res?.id;
+          if (onOpenClarification && reqId) {
+            onOpenClarification(reqId);
+          } else {
+            onSubmissionSuccess(res);
+          }
+        }}
+        onCancel={() => setStreamingPayload(null)}
+      />
+    );
+  }
 
   return (
     <div className="glass-panel" style={{ padding: '32px' }}>
@@ -499,6 +527,55 @@ export default function SubmissionForm({ departments, onSubmissionSuccess }) {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Real-Time Streaming Mode Switch */}
+        <div style={{ marginBottom: '20px', padding: '12px 18px', background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-glass)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Zap size={18} color={streamMode ? '#00F5D4' : '#94A3B8'} />
+            <div>
+              <div style={{ fontSize: '0.88rem', fontWeight: 600, color: '#F8FAFC' }}>
+                Real-Time Streaming Mode (SSE)
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>
+                Live token-by-token generation with interactive AI thought process
+              </div>
+            </div>
+          </div>
+          <label style={{ position: 'relative', display: 'inline-block', width: '44px', height: '24px', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={streamMode}
+              onChange={(e) => setStreamMode(e.target.checked)}
+              style={{ opacity: 0, width: 0, height: 0 }}
+            />
+            <span
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: streamMode ? '#3B82F6' : '#334155',
+                borderRadius: '24px',
+                transition: '0.3s',
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  content: '""',
+                  height: '18px',
+                  width: '18px',
+                  left: streamMode ? '22px' : '3px',
+                  bottom: '3px',
+                  backgroundColor: 'white',
+                  borderRadius: '50%',
+                  transition: '0.3s',
+                }}
+              />
+            </span>
+          </label>
         </div>
 
         {/* Submit Button */}

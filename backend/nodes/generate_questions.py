@@ -7,17 +7,17 @@ and identified blockers in the extracted facts.
 """
 
 import json
+from typing import Any, Dict, Iterator, List
 from backend.contracts.state import PipelineState
 from backend.schemas import ClarificationQuestionsModel
 from backend.services.llm import get_clarification_llm
 
 
-def generate_questions(state: PipelineState) -> dict:
-    """Node that generates targeted clarification questions based on weak pillars and gaps."""
+def get_generate_questions_messages(state: PipelineState) -> tuple[List[Dict[str, str]], List[str]]:
+    """Builds messages and returns (messages, gaps) for clarification question generation."""
     facts = state.get("extracted_facts", {}) or {}
     sub_scores = state.get("sub_scores", {})
     veto_reasons = state.get("veto_reasons", [])
-    current_round = state.get("clarification_round", 0)
 
     # 1. Identify specific gaps or uncertainties across the 5 pillars
     gaps = []
@@ -46,7 +46,7 @@ def generate_questions(state: PipelineState) -> dict:
 
     # 2. Build prompt for the clarification LLM
     system_prompt = (
-        "You are a Senior AI Requirements Engineer at Segula Technologies.\n"
+        "We are at Segula Technologies, a global engineering and consulting group.\n"
         "An internal business team submitted an AI project request, but the feasibility evaluation "
         "requires targeted clarification. Your task is to generate 2 to 3 precise, polite, and actionable "
         "clarification questions to resolve the data, scope, or integration ambiguities."
@@ -68,14 +68,61 @@ Generate 2-3 precise questions targeted at resolving the data, scope, or clarity
         {"role": "user", "content": user_content},
     ]
 
-    # 3. Call structured LLM for clarification questions
+    return messages, gaps
+
+
+def _build_fallback_questions(gaps: List[str]) -> List[Dict[str, str]]:
+    """Builds heuristic fallback questions if LLM fails to generate questions."""
+    fallback = []
+    gap_list = gaps if gaps else ["Data volume and labeled sample availability.", "Target user integration workflow."]
+    for gap in gap_list[:3]:
+        pillar_name = "data_readiness" if "Data" in gap else ("problem_clarity" if "Clarity" in gap else "integration")
+        fallback.append({
+            "question": f"Could you provide additional details regarding: {gap}?",
+            "target_pillar": pillar_name,
+            "technical_reasoning": "Identified gap during 5-pillar feasibility evaluation.",
+        })
+    return fallback
+
+
+def stream_generate_questions(state: PipelineState) -> Iterator[Dict[str, Any]]:
+    """Streams clarification question thinking tokens in real-time and yields final questions."""
+    messages, gaps = get_generate_questions_messages(state)
+    current_round = state.get("clarification_round", 0)
+    llm = get_clarification_llm()
+
+    for event in llm.generate_structured_output_stream(
+        prompt=messages,
+        response_schema=ClarificationQuestionsModel,
+    ):
+        if event.get("type") == "thinking":
+            yield {"type": "thinking", "content": event.get("content", "")}
+        elif event.get("type") == "result":
+            res = event.get("data")
+            questions_payload = [q.model_dump() for q in res.questions] if hasattr(res, "questions") and res.questions else []
+            if not questions_payload:
+                questions_payload = _build_fallback_questions(gaps)
+            yield {
+                "type": "result",
+                "data": {
+                    "clarification_questions": questions_payload,
+                    "clarification_round": current_round + 1,
+                },
+            }
+
+
+def generate_questions(state: PipelineState) -> dict:
+    """Node that generates targeted clarification questions based on weak pillars and gaps."""
+    messages, gaps = get_generate_questions_messages(state)
+    current_round = state.get("clarification_round", 0)
     llm = get_clarification_llm()
     result: ClarificationQuestionsModel = llm.generate_structured_output(
         prompt=messages,
         response_schema=ClarificationQuestionsModel,
     )
-
-    questions_payload = [q.model_dump() for q in result.questions]
+    questions_payload = [q.model_dump() for q in result.questions] if hasattr(result, "questions") and result.questions else []
+    if not questions_payload:
+        questions_payload = _build_fallback_questions(gaps)
 
     return {
         "clarification_questions": questions_payload,

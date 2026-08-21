@@ -27,13 +27,15 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0"))  # Deterministic output for fact extraction
 LLM_TEMPERATURE_CLARIFICATION = float(os.getenv("LLM_TEMPERATURE_CLARIFICATION", "0.3"))  # Slight variation for natural questions
-PRIMARY_MODEL = os.getenv("PRIMARY_MODEL", "gemini/gemini-3.1-flash-lite")
+PRIMARY_MODEL = os.getenv("PRIMARY_MODEL", "gemini/gemini-2.5-flash")
 FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "openai/gpt-4o")
 
 
 USE_LOCAL_LLM = os.getenv("USE_LOCAL_LLM", "false").lower() == "true"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-LOCAL_MODEL = os.getenv("LOCAL_MODEL", "ollama/qwen2.5:7b-instruct")
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
+LOCAL_MODEL = os.getenv("LOCAL_MODEL", "ollama/qwen3:8b")
+LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
 
 # ========================= Scoring Thresholds =========================
 
@@ -50,8 +52,8 @@ MAX_CLARIFICATION_ROUNDS = int(os.getenv("MAX_CLARIFICATION_ROUNDS", "2"))
 RAG_EXACT_MATCH_THRESHOLD = float(os.getenv("RAG_EXACT_MATCH_THRESHOLD", "0.75"))
 RAG_SIMILAR_THRESHOLD = float(os.getenv("RAG_SIMILAR_THRESHOLD", "0.60"))
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-004")
-EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "768"))  # Output dimension of text-embedding-004
+DEFAULT_EMBEDDING_DIM = "1024" if USE_LOCAL_LLM else "768"
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", DEFAULT_EMBEDDING_DIM))
 
 # ========================= Path Config =========================
 

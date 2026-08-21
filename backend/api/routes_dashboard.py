@@ -47,7 +47,7 @@ async def list_pending_requests(
         stat = sub.status or SubmissionStatus.PROCESSED.value
         fact = sub.fact_extraction
         rep = sub.report
-        rounds = sub.clarification_rounds or []
+        rounds = sorted(sub.clarification_rounds or [], key=lambda r: r.round_number)
         clar_round = rounds[-1].round_number if rounds else 0
         missing_fields = fact.extracted_requirements if (fact and fact.extracted_requirements) else []
 

@@ -26,7 +26,7 @@ class ClarificationModel(BaseDataModel):
         self,
         submission_id: str | uuid.UUID,
         round_number: int,
-        questions: list[str],
+        questions: list[str] | list[dict],
         answers: list[str] | None = None,
     ) -> ClarificationRound:
         """Create a new clarification round for a submission."""
@@ -40,6 +40,34 @@ class ClarificationModel(BaseDataModel):
             answers=answers or [],
         )
         return await self.save_and_return(round_)
+
+    async def create_or_update(
+        self,
+        submission_id: str | uuid.UUID,
+        round_number: int = 1,
+        questions: list[str] | list[dict] | None = None,
+        answers: list[str] | None = None,
+    ) -> ClarificationRound:
+        """Create or update a clarification round for a submission."""
+        uid = to_uuid(submission_id)
+        if not uid:
+            raise ValueError(f"Invalid UUID: {submission_id}")
+        result = await self.db_client.execute(
+            select(ClarificationRound).where(
+                ClarificationRound.submission_id == uid,
+                ClarificationRound.round_number == round_number,
+            )
+        )
+        round_ = result.scalar_one_or_none()
+        if round_:
+            if questions is not None:
+                round_.questions = questions
+            if answers is not None:
+                round_.answers = answers
+            await self.db_client.commit()
+            await self.db_client.refresh(round_)
+            return round_
+        return await self.create_round(uid, round_number, questions or [], answers or [])
 
     async def update_answers(
         self, submission_id: str | uuid.UUID, round_number: int, answers: list[str]

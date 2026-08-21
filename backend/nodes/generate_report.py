@@ -13,19 +13,25 @@ import json
 from backend.services.llm import get_llm
 
 
-def _generate_ai_feedback(decision: str, score: int, sub: dict, veto: list, facts: dict) -> str:
-    """Uses the LLM to generate dynamic, actionable feedback for rejected or stalled projects."""
-    llm = get_llm()
-    system_prompt = (
-        "You are a Senior AI Requirements Architect at Segula Technologies.\n"
-        "A business team submitted an AI project request that evaluated to 'NO_GO' "
-        "(rejected) or stalled in 'NEEDS_CLARIFICATION'. Your job is to provide constructive, "
-        "actionable, and empathetic feedback so they know exactly *why* it was not approved "
-        "and *exactly what steps* they can take to improve it (e.g., how to collect data, "
-        "how to define a measurable KPI, or stating if they don't need AI at all).\n"
-        "Be concise and professional. Format your response in clean Markdown (no top-level headings)."
-    )
-    
+FEEDBACK_SYSTEM_PROMPT = (
+    "We are at Segula Technologies, a global engineering and consulting group.\n"
+    "A business team submitted an AI project request that evaluated to 'NO_GO' "
+    "(rejected) or stalled in 'NEEDS_CLARIFICATION'. Your job is to provide constructive, "
+    "actionable, and empathetic feedback so they know exactly *why* it was not approved "
+    "and *exactly what steps* they can take to improve it (e.g., how to collect data, "
+    "how to define a measurable KPI, or stating if they don't need AI at all).\n"
+    "Be concise and professional. Format your response in clean Markdown (no top-level headings)."
+)
+
+
+def get_feedback_prompts(state: PipelineState) -> tuple[str, str]:
+    """Builds the system and user prompts for AI Architect feedback."""
+    score = state.get("score", 0)
+    sub = state.get("sub_scores", {}) or {}
+    veto = state.get("veto_reasons", []) or []
+    decision = str(state.get("decision", "NO_GO")).upper()
+    facts = state.get("extracted_facts", {}) or {}
+
     user_content = f"""
 Decision: {decision}
 Score: {score}/100
@@ -35,6 +41,20 @@ Project Summary: {facts.get('project_summary', 'N/A')}
 
 Provide 1-2 paragraphs of actionable advice. Be precise about what they must fix (Data, Scope, Integration) for the next submission.
 """
+    return FEEDBACK_SYSTEM_PROMPT, user_content
+
+
+def _generate_ai_feedback(decision: str, score: int, sub: dict, veto: list, facts: dict) -> str:
+    """Uses the LLM to generate dynamic, actionable feedback for rejected or stalled projects."""
+    llm = get_llm()
+    state = {
+        "score": score,
+        "sub_scores": sub,
+        "veto_reasons": veto,
+        "decision": decision,
+        "extracted_facts": facts,
+    }
+    system_prompt, user_content = get_feedback_prompts(state)
     try:
         return llm.generate_text(
             prompt=user_content,
@@ -47,8 +67,8 @@ Provide 1-2 paragraphs of actionable advice. Be precise about what they must fix
         return "Please review the 5-pillar breakdown and veto alerts above to address the bottlenecks in your project data or scope."
 
 
-def generate_report(state: PipelineState) -> dict:
-    """Generates a comprehensive Markdown feasibility dossier from graph state."""
+def build_static_report_markdown(state: PipelineState) -> str:
+    """Builds the structured 5-pillar Markdown feasibility dossier header."""
     form_data = state.get("form_data", {}) or {}
     facts = state.get("extracted_facts", {}) or {}
     score = state.get("score", 0)
@@ -67,7 +87,6 @@ def generate_report(state: PipelineState) -> dict:
     contact_name = form_data.get("team_contact_name", "N/A")
     contact_email = form_data.get("team_contact_email", "N/A")
 
-    # Safe extraction of pillar categories and reasons
     def _get_cat_and_reason(pillar_key: str) -> tuple[str, str]:
         obj = facts.get(pillar_key)
         if isinstance(obj, dict):
@@ -84,13 +103,11 @@ def generate_report(state: PipelineState) -> dict:
     if gov_cat == "N/A":
         gov_cat, gov_reason = _get_cat_and_reason("governance")
 
-    # Parent project matching / RAG similarity indicator
     if best_proj and max_rag >= getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60):
         proj_info = f"- **Parent Project Match:** {best_proj.get('project_name')} (Similarity: {max_rag*100:.1f}%)"
     else:
         proj_info = f"- **RAG Similarity:** {max_rag*100:.1f}% (Novel Project)"
 
-    # Recommended technical path
     identified_technique = (
         facts.get("identified_technique")
         or facts.get("ai_technique_identified")
@@ -98,7 +115,7 @@ def generate_report(state: PipelineState) -> dict:
     )
     summary_text = facts.get("project_summary") or facts.get("summary", "No summary available.")
 
-    report_markdown = f"""# 📋 AI Project Feasibility Dossier: {project_name}
+    return f"""# 📋 AI Project Feasibility Dossier: {project_name}
 
 **Department:** {department}  
 **Contact:** {contact_name} ({contact_email})  
@@ -136,6 +153,17 @@ def generate_report(state: PipelineState) -> dict:
 ### 💡 Recommended Next Steps:
 - **Technical Path:** {identified_technique}
 """
+
+
+def generate_report(state: PipelineState) -> dict:
+    """Generates a comprehensive Markdown feasibility dossier from graph state."""
+    facts = state.get("extracted_facts", {}) or {}
+    score = state.get("score", 0)
+    sub = state.get("sub_scores", {}) or {}
+    veto = state.get("veto_reasons", []) or []
+    decision = str(state.get("decision", "NO_GO")).upper()
+
+    report_markdown = build_static_report_markdown(state)
 
     if decision in ["NO_GO", "NEEDS_CLARIFICATION"]:
         feedback_text = _generate_ai_feedback(decision, score, sub, veto, facts)
