@@ -62,7 +62,7 @@ class FactExtractionModel(BaseDataModel):
         return normalized
 
     async def create_or_update(
-        self, submission_id: str | uuid.UUID, data: dict[str, Any]
+        self, submission_id: str | uuid.UUID, data: dict[str, Any], auto_commit: bool = True
     ) -> FactExtraction:
         """
         Upsert fact extraction for a submission.
@@ -81,21 +81,24 @@ class FactExtractionModel(BaseDataModel):
             for key, value in flat_data.items():
                 if hasattr(existing, key):
                     setattr(existing, key, value)
-            await self.db_client.commit()
-            await self.db_client.refresh(existing)
+            if auto_commit:
+                await self.db_client.commit()
+                await self.db_client.refresh(existing)
+            else:
+                await self.db_client.flush()
             logger.info("FactExtraction updated for submission %s", submission_id)
             return existing
 
         # Filter fields that exist on FactExtraction model
         valid_fields = {k: v for k, v in flat_data.items() if hasattr(FactExtraction, k)}
         fact = FactExtraction(submission_id=uid, **valid_fields)
-        return await self.save_and_return(fact)
+        return await self.save_and_return(fact, auto_commit=auto_commit)
 
-    async def save_fact_extraction(self, fact: FactExtraction) -> FactExtraction:
+    async def save_fact_extraction(self, fact: FactExtraction, auto_commit: bool = True) -> FactExtraction:
         """Save a FactExtraction ORM instance."""
         if isinstance(fact, FactExtraction):
-            return await self.save_and_return(fact)
-        return await self.create_or_update(fact["submission_id"], fact)
+            return await self.save_and_return(fact, auto_commit=auto_commit)
+        return await self.create_or_update(fact["submission_id"], fact, auto_commit=auto_commit)
 
     async def get_by_submission_id(self, submission_id: str | uuid.UUID) -> FactExtraction | None:
         """Fetch fact extraction by submission UUID."""

@@ -23,7 +23,7 @@ class ScoringModel(BaseDataModel):
         super().__init__(db_client)
 
     async def create_or_update(
-        self, submission_id: str | uuid.UUID, data: dict[str, Any]
+        self, submission_id: str | uuid.UUID, data: dict[str, Any], auto_commit: bool = True
     ) -> ScoringResult:
         """
         Upsert scoring result for a submission.
@@ -39,19 +39,22 @@ class ScoringModel(BaseDataModel):
             for key, value in data.items():
                 if hasattr(existing, key):
                     setattr(existing, key, value)
-            await self.db_client.commit()
-            await self.db_client.refresh(existing)
+            if auto_commit:
+                await self.db_client.commit()
+                await self.db_client.refresh(existing)
+            else:
+                await self.db_client.flush()
             logger.info("ScoringResult updated for submission %s", submission_id)
             return existing
 
         scoring = ScoringResult(submission_id=uid, **data)
-        return await self.save_and_return(scoring)
+        return await self.save_and_return(scoring, auto_commit=auto_commit)
 
-    async def save_scoring_result(self, scoring: ScoringResult) -> ScoringResult:
+    async def save_scoring_result(self, scoring: ScoringResult, auto_commit: bool = True) -> ScoringResult:
         """Save a ScoringResult ORM instance."""
         if isinstance(scoring, ScoringResult):
-            return await self.save_and_return(scoring)
-        return await self.create_or_update(scoring["submission_id"], scoring)
+            return await self.save_and_return(scoring, auto_commit=auto_commit)
+        return await self.create_or_update(scoring["submission_id"], scoring, auto_commit=auto_commit)
 
     async def get_by_submission_id(self, submission_id: str | uuid.UUID) -> ScoringResult | None:
         """Fetch scoring result by submission UUID."""

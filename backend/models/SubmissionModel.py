@@ -23,13 +23,13 @@ class SubmissionModel(BaseDataModel):
     def __init__(self, db_client: AsyncSession):
         super().__init__(db_client)
 
-    async def create_submission(self, data: dict[str, Any] | Submission) -> Submission:
+    async def create_submission(self, data: dict[str, Any] | Submission, auto_commit: bool = True) -> Submission:
         """Create a new submission record."""
         if isinstance(data, Submission):
             submission = data
         else:
             submission = Submission(**data)
-        return await self.save_and_return(submission)
+        return await self.save_and_return(submission, auto_commit=auto_commit)
 
     async def get_by_id(self, submission_id: str | uuid.UUID) -> Submission | None:
         """Fetch a single submission by UUID (string or UUID object). Returns None if not found."""
@@ -107,26 +107,31 @@ class SubmissionModel(BaseDataModel):
         """Alias for get_all."""
         return await self.get_all_with_relations(status_filter=status_filter)
 
-    async def delete_submission(self, submission_id: str | uuid.UUID) -> bool:
+    async def delete_submission(self, submission_id: str | uuid.UUID, auto_commit: bool = True) -> bool:
         """Delete a submission by ID."""
         sub = await self.get_by_id(submission_id)
         if sub:
-            await self.delete(sub)
+            await self.delete(sub, auto_commit=auto_commit)
             return True
         return False
 
-    async def update_status(self, submission_id: str, status: str) -> Submission | None:
+    async def update_status(self, submission_id: str, status: str, auto_commit: bool = True) -> Submission | None:
         """Update the status field of a submission. Returns updated instance."""
         submission = await self.get_by_id(submission_id)
         if not submission:
             logger.warning("Submission not found for status update: %s", submission_id)
             return None
         submission.status = status
-        await self.db_client.commit()
-        await self.db_client.refresh(submission)
+        if auto_commit:
+            await self.db_client.commit()
+            await self.db_client.refresh(submission)
+        else:
+            await self.db_client.flush()
         return submission
 
-    async def update_fields(self, submission_id: str, fields: dict[str, Any]) -> Submission | None:
+    async def update_fields(
+        self, submission_id: str, fields: dict[str, Any], auto_commit: bool = True
+    ) -> Submission | None:
         """Partial update of a submission's fields. Used by clarification nodes."""
         submission = await self.get_by_id(submission_id)
         if not submission:
@@ -134,8 +139,11 @@ class SubmissionModel(BaseDataModel):
         for key, value in fields.items():
             if hasattr(submission, key):
                 setattr(submission, key, value)
-        await self.db_client.commit()
-        await self.db_client.refresh(submission)
+        if auto_commit:
+            await self.db_client.commit()
+            await self.db_client.refresh(submission)
+        else:
+            await self.db_client.flush()
         return submission
 
     async def count_by_status(self) -> dict[str, int]:

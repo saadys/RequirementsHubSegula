@@ -29,6 +29,7 @@ class ClarificationModel(BaseDataModel):
         questions: list[str] | list[dict],
         answers: list[str] | None = None,
         llm_model_used: str | None = None,
+        auto_commit: bool = True,
     ) -> ClarificationRound:
         """Create a new clarification round for a submission."""
         uid = to_uuid(submission_id)
@@ -41,7 +42,7 @@ class ClarificationModel(BaseDataModel):
             answers=answers or [],
             llm_model_used=llm_model_used,
         )
-        return await self.save_and_return(round_)
+        return await self.save_and_return(round_, auto_commit=auto_commit)
 
     async def create_or_update(
         self,
@@ -49,6 +50,7 @@ class ClarificationModel(BaseDataModel):
         round_number: int = 1,
         questions: list[str] | list[dict] | None = None,
         answers: list[str] | None = None,
+        auto_commit: bool = True,
     ) -> ClarificationRound:
         """Create or update a clarification round for a submission."""
         uid = to_uuid(submission_id)
@@ -66,13 +68,22 @@ class ClarificationModel(BaseDataModel):
                 round_.questions = questions
             if answers is not None:
                 round_.answers = answers
-            await self.db_client.commit()
-            await self.db_client.refresh(round_)
+            if auto_commit:
+                await self.db_client.commit()
+                await self.db_client.refresh(round_)
+            else:
+                await self.db_client.flush()
             return round_
-        return await self.create_round(uid, round_number, questions or [], answers or [])
+        return await self.create_round(
+            uid, round_number, questions or [], answers or [], auto_commit=auto_commit
+        )
 
     async def update_answers(
-        self, submission_id: str | uuid.UUID, round_number: int, answers: list[str]
+        self,
+        submission_id: str | uuid.UUID,
+        round_number: int,
+        answers: list[str],
+        auto_commit: bool = True,
     ) -> ClarificationRound | None:
         """Record user answers for a specific clarification round."""
         uid = to_uuid(submission_id)
@@ -93,13 +104,18 @@ class ClarificationModel(BaseDataModel):
             )
             return None
         round_.answers = answers
-        await self.db_client.commit()
-        await self.db_client.refresh(round_)
+        if auto_commit:
+            await self.db_client.commit()
+            await self.db_client.refresh(round_)
+        else:
+            await self.db_client.flush()
         return round_
 
-    async def save_clarification_round(self, round_obj: ClarificationRound) -> ClarificationRound:
+    async def save_clarification_round(
+        self, round_obj: ClarificationRound, auto_commit: bool = True
+    ) -> ClarificationRound:
         """Save a ClarificationRound ORM instance."""
-        return await self.save_and_return(round_obj)
+        return await self.save_and_return(round_obj, auto_commit=auto_commit)
 
     async def get_rounds_for_submission(
         self, submission_id: str | uuid.UUID
