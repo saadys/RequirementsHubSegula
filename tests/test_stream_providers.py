@@ -9,6 +9,7 @@ Explicitly tests:
 import os
 import sys
 import time
+import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, "/app")
@@ -20,7 +21,8 @@ from backend.LLM.providers.fallback_provider import FallbackLLMProvider
 from backend.services.llm import get_streaming_llm
 
 
-def test_1_gemini_direct_stream():
+@pytest.mark.asyncio
+async def test_1_gemini_direct_stream():
     print("=" * 70)
     print("  TEST 1: DIRECT GEMINI PROVIDER STREAMING")
     print("=" * 70)
@@ -38,7 +40,7 @@ def test_1_gemini_direct_stream():
     full_text = ""
     t0 = time.time()
 
-    for event in gemini.generate_text_stream(prompt=prompt):
+    async for event in gemini.generate_text_stream(prompt=prompt):
         chunks += 1
         content = event.get("content", "")
         sys.stdout.write(content)
@@ -52,7 +54,8 @@ def test_1_gemini_direct_stream():
     print("[PASS] Gemini direct streaming works!")
 
 
-def test_2_fallback_auto_recovery():
+@pytest.mark.asyncio
+async def test_2_fallback_auto_recovery():
     print("\n" + "=" * 70)
     print("  TEST 2: FALLBACK PROVIDER AUTO-RECOVERY STREAMING")
     print("=" * 70)
@@ -81,7 +84,7 @@ def test_2_fallback_auto_recovery():
     full_text = ""
     t0 = time.time()
 
-    for event in fallback_wrapper.generate_text_stream(prompt=prompt):
+    async for event in fallback_wrapper.generate_text_stream(prompt=prompt):
         chunks += 1
         content = event.get("content", "")
         if event.get("type") == "thinking":
@@ -98,7 +101,8 @@ def test_2_fallback_auto_recovery():
     print("[PASS] Fallback provider successfully caught the dead primary and streamed from secondary!")
 
 
-def test_3_facade_stream():
+@pytest.mark.asyncio
+async def test_3_facade_stream():
     print("\n" + "=" * 70)
     print("  TEST 3: GET_STREAMING_LLM() FACADE")
     print("=" * 70)
@@ -111,7 +115,7 @@ def test_3_facade_stream():
 
     chunks = 0
     t0 = time.time()
-    for event in provider.generate_text_stream(prompt=prompt):
+    async for event in provider.generate_text_stream(prompt=prompt):
         chunks += 1
         content = event.get("content", "")
         if event.get("type") == "thinking":
@@ -127,9 +131,7 @@ def test_3_facade_stream():
 
 
 if __name__ == "__main__":
-    test_1_gemini_direct_stream()
-    test_2_fallback_auto_recovery()
-    test_3_facade_stream()
-    print("\n" + "=" * 70)
-    print("  ALL STEP 2 STREAMING TESTS PASSED SUCCESSFULLY! ✅")
-    print("=" * 70)
+    import asyncio
+    asyncio.run(test_1_gemini_direct_stream())
+    asyncio.run(test_2_fallback_auto_recovery())
+    asyncio.run(test_3_facade_stream())
