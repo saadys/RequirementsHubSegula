@@ -55,17 +55,10 @@ def calculate_feasibility_score(
             "decision": "FAST_TRACK",
         }
 
-    facts = facts or {}
     if not facts:
-        return {
-            "score": 0,
-            "percentage": 0,
-            "sub_scores": {"ai_viability": 0, "data_readiness": 0, "problem_clarity": 0, "integration": 0, "governance": 0},
-            "breakdown": {},
-            "veto_triggered": True,
-            "veto_reasons": ["Fact extraction failed"],
-            "decision": "NO_GO",
-        }
+        raise ValueError(
+            "Extracted facts are missing or empty. Cannot compute deterministic feasibility score without valid LLM analysis facts."
+        )
 
     # Extract categories and reasons safely
     def _get_cat_and_reason(pillar_key: str, fallback_cat: str = "") -> tuple[str, str]:

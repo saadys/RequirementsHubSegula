@@ -64,6 +64,7 @@ ParsingPDF = parse_pdf
 def parse_input(state: PipelineState) -> dict:
     """
     LangGraph Node function to process all uploaded files in PipelineState.
+    Idempotent: Reuses existing parsed_files_text if no new uploaded_files are provided.
     
     Args:
         state (PipelineState): The current graph state.
@@ -72,14 +73,26 @@ def parse_input(state: PipelineState) -> dict:
         dict: State update containing 'parsed_files_text'.
     """
     uploaded_files = state.get("uploaded_files", [])
+    existing_parsed = state.get("parsed_files_text", [])
+
+    # If no new uploaded files are provided and we already have extracted text (e.g. clarification round)
+    if not uploaded_files and existing_parsed:
+        return {"parsed_files_text": existing_parsed}
+
     parsed_results: list[str] = []
 
     for file_path in uploaded_files:
         path = Path(file_path)
         if path.suffix.lower() == ".pdf":
-            parsed_text = parse_pdf(file_path)
-            parsed_results.append(parsed_text)
+            try:
+                parsed_text = parse_pdf(file_path)
+                parsed_results.append(parsed_text)
+            except Exception as exc:
+                logger.error("Error reading PDF %s: %s", file_path, exc)
+                parsed_results.append(f"[ERROR] Unable to parse file '{path.name}': {exc}")
         else:
             logger.info("Skipping non-PDF file in parse_input: %s", file_path)
 
-    return {"parsed_files_text": parsed_results}
+    final_results = (existing_parsed + parsed_results) if (existing_parsed and uploaded_files) else parsed_results
+    return {"parsed_files_text": final_results}
+

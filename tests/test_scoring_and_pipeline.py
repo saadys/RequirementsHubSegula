@@ -123,3 +123,16 @@ def test_pydantic_decision_override_validation():
     # Invalid decision enum raises ValidationError
     with pytest.raises(ValidationError):
         DecisionOverrideInput(decision="SUPER_APPROVED", reviewer_name="Test")
+
+
+def test_deterministic_score_empty_facts_raises_value_error():
+    """Test that missing or empty facts raises a ValueError rather than a silent NO_GO."""
+    with pytest.raises(ValueError, match="Extracted facts are missing or empty"):
+        calculate_feasibility_score(facts={}, rag_scores=[])
+
+    with pytest.raises(ValueError, match="Extracted facts are missing or empty"):
+        calculate_feasibility_score(facts=None, rag_scores=[])
+
+    with pytest.raises(ValueError, match="Extracted facts are missing or empty"):
+        deterministic_score({"extracted_facts": {}, "rag_scores": []})
+
