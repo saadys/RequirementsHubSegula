@@ -26,6 +26,7 @@ class ReportModel(BaseDataModel):
         submission_id: str | uuid.UUID,
         report_type: str,
         content: str,
+        auto_commit: bool = True,
     ) -> Report:
         """
         Upsert a report for a submission.
@@ -39,19 +40,24 @@ class ReportModel(BaseDataModel):
         if existing:
             existing.report_type = report_type
             existing.content = content
-            await self.db_client.commit()
-            await self.db_client.refresh(existing)
+            if auto_commit:
+                await self.db_client.commit()
+                await self.db_client.refresh(existing)
+            else:
+                await self.db_client.flush()
             logger.info("Report updated for submission %s", submission_id)
             return existing
 
         report = Report(submission_id=uid, report_type=report_type, content=content)
-        return await self.save_and_return(report)
+        return await self.save_and_return(report, auto_commit=auto_commit)
 
-    async def save_report(self, report: Report) -> Report:
+    async def save_report(self, report: Report, auto_commit: bool = True) -> Report:
         """Save a Report ORM instance."""
         if isinstance(report, Report):
-            return await self.save_and_return(report)
-        return await self.create_or_update(report["submission_id"], report["report_type"], report["content"])
+            return await self.save_and_return(report, auto_commit=auto_commit)
+        return await self.create_or_update(
+            report["submission_id"], report["report_type"], report["content"], auto_commit=auto_commit
+        )
 
     async def get_by_submission_id(self, submission_id: str | uuid.UUID) -> Report | None:
         """Fetch report by submission UUID. Returns None if not generated yet."""

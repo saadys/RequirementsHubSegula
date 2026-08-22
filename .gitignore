@@ -73,3 +73,5 @@ ingestion.md
 bechmark.md
 models_recommendations.md
 prompts.md
+tests/generated_local_report.md
+*generated_local_report.md

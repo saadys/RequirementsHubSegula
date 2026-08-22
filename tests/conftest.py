@@ -65,13 +65,17 @@ async def db_session(test_engine, monkeypatch) -> AsyncGenerator[AsyncSession, N
         bind=test_engine, class_=AsyncSession, expire_on_commit=False
     )
     import sys
-    base_module = sys.modules.get("backend.models.BaseDataModel")
-    if base_module:
-        monkeypatch.setattr(base_module, "AsyncSessionLocal", session_factory)
-        monkeypatch.setattr(base_module, "engine", test_engine)
-    rag_module = sys.modules.get("backend.nodes.rag_search")
-    if rag_module:
-        monkeypatch.setattr(rag_module, "AsyncSessionLocal", session_factory)
+    for mod_name in [
+        "backend.models.BaseDataModel",
+        "backend.nodes.rag_search",
+        "backend.api.routes_stream",
+        "backend.api.routes_submissions",
+    ]:
+        mod = sys.modules.get(mod_name)
+        if mod and hasattr(mod, "AsyncSessionLocal"):
+            monkeypatch.setattr(mod, "AsyncSessionLocal", session_factory)
+        if mod and hasattr(mod, "engine"):
+            monkeypatch.setattr(mod, "engine", test_engine)
     async with session_factory() as session:
         yield session
 
@@ -83,13 +87,17 @@ async def async_client(db_session: AsyncSession, test_engine, monkeypatch) -> As
         bind=test_engine, class_=AsyncSession, expire_on_commit=False
     )
     import sys
-    base_module = sys.modules.get("backend.models.BaseDataModel")
-    if base_module:
-        monkeypatch.setattr(base_module, "AsyncSessionLocal", session_factory)
-        monkeypatch.setattr(base_module, "engine", test_engine)
-    rag_module = sys.modules.get("backend.nodes.rag_search")
-    if rag_module:
-        monkeypatch.setattr(rag_module, "AsyncSessionLocal", session_factory)
+    for mod_name in [
+        "backend.models.BaseDataModel",
+        "backend.nodes.rag_search",
+        "backend.api.routes_stream",
+        "backend.api.routes_submissions",
+    ]:
+        mod = sys.modules.get(mod_name)
+        if mod and hasattr(mod, "AsyncSessionLocal"):
+            monkeypatch.setattr(mod, "AsyncSessionLocal", session_factory)
+        if mod and hasattr(mod, "engine"):
+            monkeypatch.setattr(mod, "engine", test_engine)
 
     async def override_get_db():
         yield db_session

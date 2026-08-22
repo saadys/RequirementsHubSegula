@@ -103,20 +103,30 @@ class BaseDataModel:
     def __init__(self, db_client: AsyncSession):
         self.db_client = db_client
 
-    async def save(self, instance) -> None:
-        """Add and commit a single ORM instance."""
+    async def save(self, instance, auto_commit: bool = True) -> None:
+        """Add and commit (or flush) a single ORM instance."""
         self.db_client.add(instance)
-        await self.db_client.commit()
-        await self.db_client.refresh(instance)
+        if auto_commit:
+            await self.db_client.commit()
+            await self.db_client.refresh(instance)
+        else:
+            await self.db_client.flush()
 
-    async def save_and_return(self, instance):
-        """Add, commit, and return the refreshed ORM instance."""
+    async def save_and_return(self, instance, auto_commit: bool = True):
+        """Add, commit (or flush), and return the refreshed ORM instance."""
         self.db_client.add(instance)
-        await self.db_client.commit()
-        await self.db_client.refresh(instance)
+        if auto_commit:
+            await self.db_client.commit()
+            await self.db_client.refresh(instance)
+        else:
+            await self.db_client.flush()
         return instance
 
-    async def delete(self, instance) -> None:
-        """Delete an ORM instance and commit."""
+    async def delete(self, instance, auto_commit: bool = True) -> None:
+        """Delete an ORM instance and commit (or flush)."""
         await self.db_client.delete(instance)
-        await self.db_client.commit()
+        if auto_commit:
+            await self.db_client.commit()
+        else:
+            await self.db_client.flush()
+

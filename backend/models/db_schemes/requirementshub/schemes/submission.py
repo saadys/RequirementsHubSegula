@@ -47,6 +47,11 @@ class Submission(Base):
         JSON_TYPE, nullable=False, default=dict
     )
 
+    # Extracted text from uploaded documents (PDFs)
+    parsed_files_text: Mapped[list] = mapped_column(
+        JSON_TYPE, nullable=False, default=list
+    )
+
     # Pipeline status: PENDING | INCOMPLETE | FAST_TRACK | PROCESSED |
     #                  COMPLETED | REJECTED | NEEDS_CLARIFICATION | FAILED
     status: Mapped[str] = mapped_column(
