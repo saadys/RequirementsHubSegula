@@ -250,3 +250,116 @@ async def test_clarification_max_rounds_exhaustion(async_client: AsyncClient, db
         "already been completed" in r3_res.json()["detail"].lower()
         or "does not currently require clarification" in r3_res.json()["detail"].lower()
     )
+
+
+@pytest.mark.asyncio
+async def test_clarification_preserves_parsed_files_text(
+    async_client: AsyncClient, db_session, seeded_department
+):
+    """Test that parsed_files_text persisted on Submission is preserved and accessible in clarification."""
+    req_uuid = uuid.uuid4()
+    req_id = str(req_uuid)
+
+    sub = Submission(
+        id=req_uuid,
+        project_name="AI Fleet Maintenance",
+        department_id="automotive",
+        team_contact_name="Claire Martin",
+        team_contact_email="claire.martin@segula.fr",
+        problem_description="Predictive maintenance needed for truck fleet.",
+        current_process="Scheduled maintenance every 10k km.",
+        expected_outcome="Predict failures 48h in advance.",
+        data_description="CAN bus logs and maintenance history.",
+        deadline_urgency="high",
+        department_specific={"powertrain_type": "diesel"},
+        parsed_files_text=["--- Page 1 ---\nTechnical CAN bus specs and error codes attached."],
+        status=SubmissionStatus.NEEDS_CLARIFICATION.value,
+    )
+    db_session.add(sub)
+
+    scoring = ScoringResult(
+        submission_id=req_uuid,
+        score=65,
+        decision="NEEDS_CLARIFICATION",
+        breakdown={"sub_scores": {"ai_viability": 70, "data_readiness": 60}},
+    )
+    db_session.add(scoring)
+
+    round_1 = ClarificationRound(
+        submission_id=req_uuid,
+        round_number=1,
+        questions=[{"question": "How many vehicles are in the active fleet?", "target_pillar": "data_readiness"}],
+        answers=[],
+    )
+    db_session.add(round_1)
+    await db_session.commit()
+
+    # Verify submission response includes parsed_files_text
+    get_res = await async_client.get(f"/api/submissions/{req_id}")
+    assert get_res.status_code == 200
+    assert get_res.json()["parsed_files_text"] == ["--- Page 1 ---\nTechnical CAN bus specs and error codes attached."]
+
+
+@pytest.mark.asyncio
+async def test_clarification_fallback_empty_answers(async_client: AsyncClient, db_session, seeded_department, monkeypatch):
+    """Test that submitting clarification handles answers safely without NameError."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    req_uuid = uuid.uuid4()
+    req_id = str(req_uuid)
+
+    sub = Submission(
+        id=req_uuid,
+        project_name="Empty Answers Fallback Test",
+        department_id="corporate_support",
+        team_contact_name="Tester",
+        team_contact_email="tester@segula.fr",
+        problem_description="Test problem description",
+        current_process="Manual",
+        expected_outcome="Automated",
+        data_description="Some data",
+        deadline_urgency="low",
+        department_specific={"service_area": "hr"},
+        status=SubmissionStatus.NEEDS_CLARIFICATION.value,
+    )
+    db_session.add(sub)
+
+    scoring = ScoringResult(
+        submission_id=req_uuid,
+        score=50,
+        decision="NEEDS_CLARIFICATION",
+        breakdown={"sub_scores": {"ai_viability": 50}},
+    )
+    db_session.add(scoring)
+
+    round_1 = ClarificationRound(
+        submission_id=req_uuid,
+        round_number=1,
+        questions=[{"question": "Can you specify the scope?", "target_pillar": "problem_clarity"}],
+        answers=[],
+    )
+    db_session.add(round_1)
+    await db_session.commit()
+
+    mock_graph = MagicMock()
+    mock_graph.ainvoke = AsyncMock(return_value={
+        "status": "COMPLETED",
+        "score": 80,
+        "decision": "GO",
+        "score_breakdown": {"ai_viability": 80},
+        "report": "Final evaluation report content.",
+    })
+    monkeypatch.setattr("backend.api.routes_clarification.get_compiled_graph", lambda: mock_graph)
+
+    res = await async_client.post(
+        f"/api/submissions/{req_id}/clarification",
+        json={"answers": ["Scope is restricted to internal documentation search."]}
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert isinstance(data["answers"], list)
+    assert len(data["answers"]) == 1
+    assert data["decision"] == "GO"
+
+
+
