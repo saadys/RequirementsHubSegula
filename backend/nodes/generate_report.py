@@ -44,7 +44,7 @@ Provide 1-2 paragraphs of actionable advice. Be precise about what they must fix
     return FEEDBACK_SYSTEM_PROMPT, user_content
 
 
-def _generate_ai_feedback(decision: str, score: int, sub: dict, veto: list, facts: dict) -> str:
+async def _generate_ai_feedback(decision: str, score: int, sub: dict, veto: list, facts: dict) -> str:
     """Uses the LLM to generate dynamic, actionable feedback for rejected or stalled projects."""
     llm = get_llm()
     state = {
@@ -56,11 +56,12 @@ def _generate_ai_feedback(decision: str, score: int, sub: dict, veto: list, fact
     }
     system_prompt, user_content = get_feedback_prompts(state)
     try:
-        return llm.generate_text(
+        res = await llm.generate_text(
             prompt=user_content,
             system_prompt=system_prompt,
             temperature=0.7
-        ).strip()
+        )
+        return res.strip()
     except Exception as e:
         import logging
         logging.getLogger("backend.nodes.generate_report").error(f"Feedback generation failed: {e}")
@@ -155,7 +156,7 @@ def build_static_report_markdown(state: PipelineState) -> str:
 """
 
 
-def generate_report(state: PipelineState) -> dict:
+async def generate_report(state: PipelineState) -> dict:
     """Generates a comprehensive Markdown feasibility dossier from graph state."""
     facts = state.get("extracted_facts", {}) or {}
     score = state.get("score", 0)
@@ -166,7 +167,7 @@ def generate_report(state: PipelineState) -> dict:
     report_markdown = build_static_report_markdown(state)
 
     if decision in ["NO_GO", "NEEDS_CLARIFICATION"]:
-        feedback_text = _generate_ai_feedback(decision, score, sub, veto, facts)
+        feedback_text = await _generate_ai_feedback(decision, score, sub, veto, facts)
         report_markdown += f"\n---\n\n### 🧠 AI Architect Feedback & Actionable Next Steps:\n{feedback_text}\n"
 
     report_type = "go" if decision in ["GO", "FAST_TRACK"] else ("no_go" if decision == "NO_GO" else "partial")

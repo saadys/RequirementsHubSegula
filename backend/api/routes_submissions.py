@@ -88,7 +88,7 @@ def entity_to_submission_response(sub: Submission) -> SubmissionResponse:
         veto_triggered=veto_triggered,
         veto_reasons=veto_reasons,
         report_type=rep.report_type if rep else None,
-        missing_fields=sub.missing_fields or (fact.extracted_requirements if (fact and fact.extracted_requirements) else []),
+        missing_fields=(fact.extracted_requirements if (fact and fact.extracted_requirements) else []),
         clarification_questions=active_questions,
         clarification_round=round_num,
         max_rounds=MAX_CLARIFICATION_ROUNDS,
