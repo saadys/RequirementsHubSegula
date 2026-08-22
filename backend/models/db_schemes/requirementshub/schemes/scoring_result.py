@@ -6,11 +6,15 @@ Stores automated feasibility score and deterministic routing decision.
 """
 
 import uuid
+from typing import TYPE_CHECKING
 from sqlalchemy import Integer, String, ForeignKey, UniqueConstraint, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from .base import Base
+
+if TYPE_CHECKING:
+    from .submission import Submission
 
 JSON_TYPE = JSONB().with_variant(JSON, "sqlite")
 

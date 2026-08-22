@@ -6,11 +6,15 @@ Stores the final generated Markdown document for a submission.
 """
 
 import uuid
+from typing import TYPE_CHECKING
 from sqlalchemy import String, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from .base import Base
+
+if TYPE_CHECKING:
+    from .submission import Submission
 
 
 class Report(Base):

@@ -6,11 +6,15 @@ The original scoring_result is preserved — this is an append-only audit trail.
 """
 
 import uuid
+from typing import TYPE_CHECKING
 from sqlalchemy import String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from .base import Base
+
+if TYPE_CHECKING:
+    from .submission import Submission
 
 
 class ReviewerOverride(Base):
