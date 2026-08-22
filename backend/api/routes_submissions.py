@@ -92,7 +92,7 @@ def entity_to_submission_response(sub: Submission) -> SubmissionResponse:
         clarification_questions=active_questions,
         clarification_round=round_num,
         max_rounds=MAX_CLARIFICATION_ROUNDS,
-        parsed_files_text=[],
+        parsed_files_text=sub.parsed_files_text or [],
         report=rep.content if rep else None,
         created_at=created_at_str,
         form_data=form_data,
@@ -137,67 +137,77 @@ async def _execute_pipeline_in_background(
         status_str = _determine_status(result_state)
 
         async with AsyncSessionLocal() as db:
-            sub_model = SubmissionModel(db)
-            fact_model = FactExtractionModel(db)
-            scoring_model = ScoringModel(db)
-            report_model = ReportModel(db)
-            clar_model = ClarificationModel(db)
+            async with db.begin():
+                sub_model = SubmissionModel(db)
+                fact_model = FactExtractionModel(db)
+                scoring_model = ScoringModel(db)
+                report_model = ReportModel(db)
+                clar_model = ClarificationModel(db)
 
-            if result_state.get("missing_fields"):
-                await sub_model.update_fields(
-                    request_id, {"missing_fields": result_state.get("missing_fields") or []}
-                )
+                if result_state.get("missing_fields"):
+                    await sub_model.update_fields(
+                        request_id, {"missing_fields": result_state.get("missing_fields") or []}, auto_commit=False
+                    )
 
-            if result_state.get("extracted_facts"):
-                facts_payload = dict(result_state.get("extracted_facts") or {})
-                if result_state.get("extracted_facts_model_used"):
-                    facts_payload["llm_model_used"] = result_state.get("extracted_facts_model_used")
-                await fact_model.create_or_update(
-                    request_id,
-                    facts_payload,
-                )
+                if result_state.get("parsed_files_text"):
+                    await sub_model.update_fields(
+                        request_id, {"parsed_files_text": result_state.get("parsed_files_text") or []}, auto_commit=False
+                    )
 
-            if result_state.get("score") is not None or result_state.get("decision"):
-                sub_scores_val = result_state.get("sub_scores") or {}
-                veto_trig = result_state.get("veto_triggered", False)
-                veto_reasons_val = result_state.get("veto_reasons") or []
+                if result_state.get("extracted_facts"):
+                    facts_payload = dict(result_state.get("extracted_facts") or {})
+                    if result_state.get("extracted_facts_model_used"):
+                        facts_payload["llm_model_used"] = result_state.get("extracted_facts_model_used")
+                    await fact_model.create_or_update(
+                        request_id,
+                        facts_payload,
+                        auto_commit=False,
+                    )
 
-                breakdown_payload = {
-                    "sub_scores": sub_scores_val,
-                    "veto_triggered": veto_trig,
-                    "veto_reasons": veto_reasons_val,
-                }
-                if result_state.get("score_breakdown"):
-                    breakdown_payload["legacy_breakdown"] = result_state.get("score_breakdown")
+                if result_state.get("score") is not None or result_state.get("decision"):
+                    sub_scores_val = result_state.get("sub_scores") or {}
+                    veto_trig = result_state.get("veto_triggered", False)
+                    veto_reasons_val = result_state.get("veto_reasons") or []
 
-                await scoring_model.create_or_update(
-                    request_id,
-                    {
-                        "score": result_state.get("score"),
-                        "percentage": result_state.get("score"),
-                        "decision": result_state.get("decision"),
-                        "breakdown": breakdown_payload,
-                    },
-                )
+                    breakdown_payload = {
+                        "sub_scores": sub_scores_val,
+                        "veto_triggered": veto_trig,
+                        "veto_reasons": veto_reasons_val,
+                    }
+                    if result_state.get("score_breakdown"):
+                        breakdown_payload["legacy_breakdown"] = result_state.get("score_breakdown")
 
-            if result_state.get("report"):
-                await report_model.create_or_update(
-                    request_id,
-                    report_type=result_state.get("report_type", "FULL_CAHIER_DES_CHARGES"),
-                    content=result_state.get("report"),
-                )
+                    await scoring_model.create_or_update(
+                        request_id,
+                        {
+                            "score": result_state.get("score"),
+                            "percentage": result_state.get("score"),
+                            "decision": result_state.get("decision"),
+                            "breakdown": breakdown_payload,
+                        },
+                        auto_commit=False,
+                    )
 
-            if result_state.get("clarification_questions"):
-                await clar_model.create_round(
-                    submission_id=request_id,
-                    round_number=result_state.get("clarification_round", 1),
-                    questions=result_state.get("clarification_questions", []),
-                    answers=result_state.get("clarification_answers", []),
-                    llm_model_used=result_state.get("clarification_model_used"),
-                )
+                if result_state.get("report"):
+                    await report_model.create_or_update(
+                        request_id,
+                        report_type=result_state.get("report_type", "FULL_CAHIER_DES_CHARGES"),
+                        content=result_state.get("report"),
+                        auto_commit=False,
+                    )
 
-            # Update status to completed/needs_clarification at the very end after all child records are committed
-            await sub_model.update_status(request_id, status_str)
+                if result_state.get("clarification_questions"):
+                    await clar_model.create_round(
+                        submission_id=request_id,
+                        round_number=result_state.get("clarification_round", 1),
+                        questions=result_state.get("clarification_questions", []),
+                        answers=result_state.get("clarification_answers", []),
+                        llm_model_used=result_state.get("clarification_model_used"),
+                        auto_commit=False,
+                    )
+
+                # Update status to completed/needs_clarification at the very end after all child records are staged
+                await sub_model.update_status(request_id, status_str, auto_commit=False)
 
         logger.info(f"Background task finished for request {request_id}. Status: {status_str}")
     except Exception as e:

@@ -69,65 +69,75 @@ def _determine_status(result_state: Dict[str, Any]) -> str:
 
 
 async def _save_pipeline_state_to_db(request_id: str, state: PipelineState, final_status: str):
-    """Persists pipeline state, facts, scores, report, and clarifications to PostgreSQL."""
+    """Persists pipeline state, facts, scores, report, and clarifications to PostgreSQL atomically."""
     async with AsyncSessionLocal() as db:
-        sub_model = SubmissionModel(db)
-        fact_model = FactExtractionModel(db)
-        scoring_model = ScoringModel(db)
-        report_model = ReportModel(db)
-        clar_model = ClarificationModel(db)
+        async with db.begin():
+            sub_model = SubmissionModel(db)
+            fact_model = FactExtractionModel(db)
+            scoring_model = ScoringModel(db)
+            report_model = ReportModel(db)
+            clar_model = ClarificationModel(db)
 
-        if state.get("extracted_facts"):
-            await fact_model.create_or_update(
-                request_id,
-                state.get("extracted_facts") or {},
-            )
+            if state.get("parsed_files_text"):
+                await sub_model.update_fields(
+                    request_id, {"parsed_files_text": state.get("parsed_files_text") or []}, auto_commit=False
+                )
 
-        if state.get("score") is not None or state.get("decision"):
-            sub_scores_val = state.get("sub_scores") or {}
-            veto_trig = state.get("veto_triggered", False)
-            veto_reasons_val = state.get("veto_reasons") or []
+            if state.get("extracted_facts"):
+                await fact_model.create_or_update(
+                    request_id,
+                    state.get("extracted_facts") or {},
+                    auto_commit=False,
+                )
 
-            breakdown_payload = {
-                "sub_scores": sub_scores_val,
-                "veto_triggered": veto_trig,
-                "veto_reasons": veto_reasons_val,
-            }
-            if state.get("score_breakdown"):
-                breakdown_payload["legacy_breakdown"] = state["score_breakdown"]
+            if state.get("score") is not None or state.get("decision"):
+                sub_scores_val = state.get("sub_scores") or {}
+                veto_trig = state.get("veto_triggered", False)
+                veto_reasons_val = state.get("veto_reasons") or []
 
-            await scoring_model.create_or_update(
-                request_id,
-                {
-                    "score": state.get("score"),
-                    "percentage": state.get("score"),
-                    "decision": state.get("decision"),
-                    "breakdown": breakdown_payload,
-                },
-            )
+                breakdown_payload = {
+                    "sub_scores": sub_scores_val,
+                    "veto_triggered": veto_trig,
+                    "veto_reasons": veto_reasons_val,
+                }
+                if state.get("score_breakdown"):
+                    breakdown_payload["legacy_breakdown"] = state["score_breakdown"]
 
-        if state.get("report"):
-            report_type_val = state.get("report_type") or (
-                "fast_track"
-                if state.get("is_exact_match")
-                else ("go" if state.get("decision") in ("GO", "FAST_TRACK") else "no_go")
-            )
-            await report_model.create_or_update(
-                request_id,
-                report_type=report_type_val,
-                content=state.get("report") or "",
-            )
+                await scoring_model.create_or_update(
+                    request_id,
+                    {
+                        "score": state.get("score"),
+                        "percentage": state.get("score"),
+                        "decision": state.get("decision"),
+                        "breakdown": breakdown_payload,
+                    },
+                    auto_commit=False,
+                )
 
-        if state.get("clarification_questions") and final_status == SubmissionStatus.NEEDS_CLARIFICATION.value:
-            round_num = state.get("clarification_round", 1)
-            await clar_model.create_or_update(
-                request_id,
-                round_number=round_num,
-                questions=state.get("clarification_questions") or [],
-                answers=[],
-            )
+            if state.get("report"):
+                report_type_val = state.get("report_type") or (
+                    "fast_track"
+                    if state.get("is_exact_match")
+                    else ("go" if state.get("decision") in ("GO", "FAST_TRACK") else "no_go")
+                )
+                await report_model.create_or_update(
+                    request_id,
+                    report_type=report_type_val,
+                    content=state.get("report") or "",
+                    auto_commit=False,
+                )
 
-        await sub_model.update_status(request_id, final_status)
+            if state.get("clarification_questions") and final_status == SubmissionStatus.NEEDS_CLARIFICATION.value:
+                round_num = state.get("clarification_round", 1)
+                await clar_model.create_or_update(
+                    request_id,
+                    round_number=round_num,
+                    questions=state.get("clarification_questions") or [],
+                    answers=[],
+                    auto_commit=False,
+                )
+
+            await sub_model.update_status(request_id, final_status, auto_commit=False)
 
 
 async def _stream_pipeline_execution(
@@ -521,6 +531,8 @@ async def _stream_clarification_execution(
                 "request_id": request_id,
                 "form_data": form_dict,
                 "department": sub.department_id or "corporate_support",
+                "uploaded_files": [],
+                "parsed_files_text": sub.parsed_files_text or [],
                 "clarification_round": curr_round_num,
                 "clarification_answers": all_answers,
                 "clarification_questions": all_questions,
