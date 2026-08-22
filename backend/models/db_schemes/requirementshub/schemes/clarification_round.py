@@ -6,11 +6,15 @@ Tracks clarification Q&A iterations between the LLM and the business user.
 """
 
 import uuid
+from typing import TYPE_CHECKING
 from sqlalchemy import Integer, String, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from .base import Base
+
+if TYPE_CHECKING:
+    from .submission import Submission
 
 JSON_TYPE = JSONB().with_variant(JSON, "sqlite")
 
