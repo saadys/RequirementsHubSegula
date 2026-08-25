@@ -1,6 +1,7 @@
 import asyncio
 import uuid
 import pytest
+from unittest.mock import patch, AsyncMock
 from httpx import AsyncClient
 
 from backend.models.db_schemes.requirementshub.schemes import (
@@ -9,6 +10,44 @@ from backend.models.db_schemes.requirementshub.schemes import (
     ClarificationRound,
 )
 from backend.models.enums.SubmissionStatusEnum import SubmissionStatus
+from backend.schemas import (
+    CategoricalFactExtraction,
+    ClarificationQuestionsModel,
+    QuestionItem,
+    PillarAIViability,
+    PillarDataReadiness,
+    PillarProblemClarity,
+    PillarIntegration,
+    PillarGovernance,
+)
+
+
+def _mock_llm(return_value, model_used="mock/test-model"):
+    """Fake LLMInterface whose generate_structured_output resolves to return_value."""
+    llm = AsyncMock()
+    llm.generate_structured_output = AsyncMock(return_value=return_value)
+    llm.last_model_used = model_used
+    return llm
+
+
+def _facts(
+    ai_viability="HIGHLY_VIABLE",
+    data_readiness="READY",
+    problem_clarity="CLEAR",
+    integration="SIMPLE",
+    governance="SAFE",
+    summary="Mocked project summary.",
+    technique="RAG + Classification",
+) -> CategoricalFactExtraction:
+    return CategoricalFactExtraction(
+        project_summary=summary,
+        identified_technique=technique,
+        ai_viability=PillarAIViability(category=ai_viability, reason="Mocked reasoning."),
+        data_readiness=PillarDataReadiness(category=data_readiness, reason="Mocked reasoning."),
+        problem_clarity=PillarProblemClarity(category=problem_clarity, reason="Mocked reasoning."),
+        integration_feasibility=PillarIntegration(category=integration, reason="Mocked reasoning."),
+        governance_and_safety=PillarGovernance(category=governance, reason="Mocked reasoning."),
+    )
 
 
 @pytest.mark.asyncio
@@ -72,7 +111,15 @@ async def test_clarification_loop_e2e(async_client: AsyncClient, seeded_departme
         },
     }
 
-    create_res = await async_client.post("/api/submissions/", json=vague_payload)
+    vague_facts = _facts(problem_clarity="VAGUE", data_readiness="NONE", summary="Vague HR AI idea, no defined scope.")
+    resolved_facts = _facts(problem_clarity="CLEAR", data_readiness="READY", summary="Resume skill parser, scoped and data-backed.")
+    mock_questions = ClarificationQuestionsModel(questions=[
+        QuestionItem(question="What specific HR process should this target?", target_pillar="problem_clarity"),
+    ])
+
+    with patch("backend.nodes.llm_analyze.get_structured_llm", return_value=_mock_llm(vague_facts)), \
+         patch("backend.nodes.generate_questions.get_clarification_llm", return_value=_mock_llm(mock_questions)):
+        create_res = await async_client.post("/api/submissions/", json=vague_payload)
     assert create_res.status_code == 201
     submission_data = create_res.json()
     req_id = submission_data["request_id"]
@@ -91,9 +138,11 @@ async def test_clarification_loop_e2e(async_client: AsyncClient, seeded_departme
             ]
         }
 
-        post_answer_res = await async_client.post(
-            f"/api/submissions/{req_id}/clarification", json=answers_payload
-        )
+        with patch("backend.nodes.llm_analyze.get_structured_llm", return_value=_mock_llm(resolved_facts)), \
+             patch("backend.nodes.generate_questions.get_clarification_llm", return_value=_mock_llm(mock_questions)):
+            post_answer_res = await async_client.post(
+                f"/api/submissions/{req_id}/clarification", json=answers_payload
+            )
         assert post_answer_res.status_code == 200
         updated_clar = post_answer_res.json()
 
@@ -147,7 +196,9 @@ async def test_clarification_resolved_early_to_go(async_client: AsyncClient, db_
             "We have 15,000 cleaned and labeled historical tickets categorized into 8 IT categories with ground truth labels.",
         ]
     }
-    r1_res = await async_client.post(f"/api/submissions/{req_id}/clarification", json=answers_r1)
+    resolved_facts = _facts(problem_clarity="CLEAR", data_readiness="READY", summary="Ticket routing classifier, resolved scope and data.")
+    with patch("backend.nodes.llm_analyze.get_structured_llm", return_value=_mock_llm(resolved_facts)):
+        r1_res = await async_client.post(f"/api/submissions/{req_id}/clarification", json=answers_r1)
     assert r1_res.status_code == 200
     r1_data = r1_res.json()
     assert r1_data["clarification_round"] >= 1
@@ -216,7 +267,9 @@ async def test_clarification_max_rounds_exhaustion(async_client: AsyncClient, db
             "Metrics are logged hourly via Modbus gateway.",
         ]
     }
-    r2_res = await async_client.post(f"/api/submissions/{req_id}/clarification", json=answers_r2)
+    still_unclear_facts = _facts(problem_clarity="PARTIAL", data_readiness="UNLABELED_OR_MESSY", summary="HVAC predictive maintenance, still ambiguous scope.")
+    with patch("backend.nodes.llm_analyze.get_structured_llm", return_value=_mock_llm(still_unclear_facts)):
+        r2_res = await async_client.post(f"/api/submissions/{req_id}/clarification", json=answers_r2)
     assert r2_res.status_code == 200
     r2_data = r2_res.json()
 
@@ -349,7 +402,14 @@ async def test_clarification_fallback_empty_answers(async_client: AsyncClient, d
         "score_breakdown": {"ai_viability": 80},
         "report": "Final evaluation report content.",
     })
-    monkeypatch.setattr("backend.api.routes_clarification.get_compiled_graph", lambda: mock_graph)
+    # No checkpoint exists for this thread_id (state was seeded directly in the DB,
+    # the graph never actually ran) — aget_state must report an empty snapshot so
+    # the route takes the fallback (reconstruct-and-rerun) path, not the resume path.
+    empty_snapshot = MagicMock()
+    empty_snapshot.values = {}
+    empty_snapshot.next = ()
+    mock_graph.aget_state = AsyncMock(return_value=empty_snapshot)
+    monkeypatch.setattr("backend.api.routes_clarification.get_compiled_graph", lambda checkpointer=None: mock_graph)
 
     res = await async_client.post(
         f"/api/submissions/{req_id}/clarification",

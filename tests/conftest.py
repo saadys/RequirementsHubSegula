@@ -34,6 +34,7 @@ from backend.models.db_schemes.requirementshub.schemes import (
     ReviewerOverride,
 )
 from backend.models.BaseDataModel import get_db
+from backend.graph.builder import get_checkpointer
 from backend.main import app
 
 
@@ -103,6 +104,12 @@ async def async_client(db_session: AsyncSession, test_engine, monkeypatch) -> As
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    # The real checkpointer lives on app.state, set up by the FastAPI lifespan —
+    # which ASGITransport does not run for these tests. Default to None here so
+    # get_compiled_graph(None) compiles without a checkpointer and routes take the
+    # DB-reconstruction fallback path; tests exercising the resume path override
+    # this again with a real or fake checkpointer/graph as needed.
+    app.dependency_overrides[get_checkpointer] = lambda: None
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
