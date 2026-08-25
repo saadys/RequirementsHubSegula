@@ -5,6 +5,13 @@ The TypedDict that flows through every LangGraph node.
 Track A writes to some fields, Track B reads them (and vice versa).
 
 ⚠️  SHARED FILE — Do not edit without agreement from both engineers.
+
+⚠️  CHECKPOINTED — this graph runs with a Postgres checkpointer (see
+backend/graph/builder.py / backend/main.py), so old threads paused at
+await_clarification_answers get deserialized straight into this shape on
+resume, potentially long after a new field was added here. Every node MUST
+read fields with state.get(key, default) — never state[key] — or a resumed
+thread from before the field existed will KeyError in production.
 """
 
 from typing import TypedDict
