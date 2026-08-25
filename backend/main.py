@@ -8,9 +8,17 @@ from contextlib import asynccontextmanager
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from backend.api import api_router
 from backend.core.GCPJsonFormatter import setup_logging
+from backend.config import (
+    CHECKPOINTER_DATABASE_URL,
+    CHECKPOINTER_POOL_MIN_SIZE,
+    CHECKPOINTER_POOL_MAX_SIZE,
+)
 
 # Initialiser le système de logging structuré (Twelve-Factor Factor XI) avant FastAPI()
 setup_logging()
@@ -24,10 +32,44 @@ async def startup_span(app: FastAPI):
     app.state.db_engine = engine
     logger.info("Asyncpg DB engine initialized")
 
+    # Shared psycopg connection pool for the LangGraph checkpointer — created once
+    # here (lifespan-scoped), never per-request. AsyncPostgresSaver requires
+    # autocommit + dict_row on every connection it uses; row_factory/autocommit
+    # must be set on the pool's connection kwargs, not per-call, since the saver
+    # borrows raw connections from the pool without configuring them itself.
+    #
+    # ⚠️ Windows note: psycopg's async mode requires asyncio's SelectorEventLoop —
+    # it cannot connect under the default Windows ProactorEventLoop (raises
+    # PoolTimeout after silently retrying). Cloud Run/Docker (Linux) is unaffected.
+    # Running this app natively on Windows (not WSL/Docker) requires either
+    # `asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())`
+    # before the event loop starts, or running under WSL/Docker instead.
+    checkpointer_pool = AsyncConnectionPool(
+        conninfo=CHECKPOINTER_DATABASE_URL,
+        min_size=CHECKPOINTER_POOL_MIN_SIZE,
+        max_size=CHECKPOINTER_POOL_MAX_SIZE,
+        kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+        open=False,
+    )
+    await checkpointer_pool.open()
+    app.state.checkpointer_pool = checkpointer_pool
+
+    checkpointer = AsyncPostgresSaver(checkpointer_pool)
+    await checkpointer.setup()
+    app.state.checkpointer = checkpointer
+    logger.info(
+        "LangGraph Postgres checkpointer pool initialized (min=%d, max=%d)",
+        CHECKPOINTER_POOL_MIN_SIZE,
+        CHECKPOINTER_POOL_MAX_SIZE,
+    )
+
 
 async def shutdown_span(app: FastAPI):
     """Tâches exécutées à l'arrêt de l'application (ex: fermeture des connexions)."""
     logger.info("Application AI Requirement Hub shutting down...")
+    if hasattr(app.state, "checkpointer_pool"):
+        await app.state.checkpointer_pool.close()
+        logger.info("LangGraph checkpointer pool closed")
     if hasattr(app.state, "db_engine"):
         await app.state.db_engine.dispose()
         logger.info("Asyncpg DB engine disposed")
