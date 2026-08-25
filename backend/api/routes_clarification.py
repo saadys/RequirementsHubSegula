@@ -5,43 +5,26 @@ Handles multi-turn clarification loops for submissions requiring additional cont
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import MAX_CLARIFICATION_ROUNDS
+from backend.domain.status_policy import resolve_submission_status
 from backend.graph.builder import get_compiled_graph, get_checkpointer
+from backend.mappers.submission_mapper import build_clarification_response
 from backend.models.BaseDataModel import get_db
 from backend.models.ClarificationModel import ClarificationModel
 from backend.models.FactExtractionModel import FactExtractionModel
 from backend.models.ReportModel import ReportModel
 from backend.models.ScoringModel import ScoringModel
 from backend.models.SubmissionModel import SubmissionModel
-from backend.schemas import ClarificationAnswerInput, ClarificationResponse, Decision, SubmissionStatus
+from backend.schemas import ClarificationAnswerInput, ClarificationResponse, SubmissionStatus
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/submissions", tags=["Clarification"])
-
-
-def _determine_status(result_state: Dict[str, Any]) -> str:
-    """Derives overall user-facing status from pipeline result state."""
-    if result_state.get("missing_fields"):
-        return SubmissionStatus.INCOMPLETE.value
-    if result_state.get("is_exact_match"):
-        return SubmissionStatus.FAST_TRACK.value
-    decision = result_state.get("decision")
-    if decision == Decision.GO.value:
-        return SubmissionStatus.COMPLETED.value
-    elif decision == Decision.NO_GO.value:
-        return SubmissionStatus.REJECTED.value
-    elif decision == Decision.NEEDS_CLARIFICATION.value:
-        # If report was generated (after max rounds exhausted), mark COMPLETED
-        if result_state.get("report"):
-            return SubmissionStatus.COMPLETED.value
-        return SubmissionStatus.NEEDS_CLARIFICATION.value
-    return SubmissionStatus.PROCESSED.value
 
 
 @router.get(
@@ -59,47 +42,7 @@ async def get_clarification_questions(request_id: str, db: AsyncSession = Depend
             detail=f"Submission '{request_id}' not found",
         )
 
-    rounds = sorted(sub.clarification_rounds or [], key=lambda r: r.round_number)
-    latest_round = rounds[-1] if rounds else None
-    round_num = latest_round.round_number if latest_round else 0
-    has_answered = bool(latest_round and latest_round.answers and len(latest_round.answers) > 0)
-    is_exhausted = (round_num >= MAX_CLARIFICATION_ROUNDS and has_answered) or (sub.report is not None and sub.status in ("COMPLETED", "REJECTED", "FAST_TRACK"))
-    
-    # Collect all historical answers across rounds
-    all_answers = []
-    for r in rounds:
-        if r.answers:
-            all_answers.extend(r.answers)
-
-    overrides = sub.reviewer_overrides or []
-    scoring = sub.scoring_result
-    decision = overrides[0].new_decision if overrides else (scoring.decision if scoring else None)
-
-    sub_scores = {}
-    veto_triggered = False
-    veto_reasons = []
-    if scoring and scoring.breakdown:
-        sub_scores = scoring.breakdown.get("sub_scores") or scoring.breakdown.get("pillar_scores") or {}
-        veto_triggered = bool(scoring.breakdown.get("veto_triggered", False))
-        veto_reasons = scoring.breakdown.get("veto_reasons") or []
-
-    active_questions = [] if (is_exhausted or has_answered) else (latest_round.questions if latest_round else [])
-
-    return ClarificationResponse(
-        request_id=str(sub.id),
-        status=sub.status,
-        clarification_round=round_num,
-        max_rounds=MAX_CLARIFICATION_ROUNDS,
-        questions=active_questions,
-        answers=all_answers if all_answers else (latest_round.answers if latest_round else []),
-        score=scoring.score if scoring else None,
-        decision=decision,
-        sub_scores=sub_scores,
-        veto_triggered=veto_triggered,
-        veto_reasons=veto_reasons,
-        report_type=sub.report.report_type if sub.report else None,
-        report=sub.report.content if sub.report else None,
-    )
+    return build_clarification_response(sub)
 
 
 @router.post(
@@ -206,7 +149,7 @@ async def submit_clarification_answers(
         }
         updated_state = await graph.ainvoke(state, run_config)
 
-    status_str = _determine_status(updated_state)
+    status_str = resolve_submission_status(updated_state)
     await sub_model.update_status(request_id, status_str)
 
     if updated_state.get("extracted_facts"):
@@ -263,41 +206,13 @@ async def submit_clarification_answers(
             )
 
     refreshed_sub = await sub_model.get_by_id_with_relations(request_id)
-    ref_rounds = refreshed_sub.clarification_rounds or []
-    ref_latest = ref_rounds[-1] if ref_rounds else None
-    ref_round_num = ref_latest.round_number if ref_latest else curr_round_num
-    ref_scoring = refreshed_sub.scoring_result
 
-    # Collect all historical answers across rounds
-    all_answers = []
-    for r in ref_rounds:
-        if r.answers:
-            all_answers.extend(r.answers)
-
-    is_done = (ref_round_num >= MAX_CLARIFICATION_ROUNDS and bool(ref_latest and ref_latest.answers)) or (refreshed_sub.report is not None and refreshed_sub.status in ("COMPLETED", "REJECTED", "FAST_TRACK"))
-    active_questions = [] if is_done else (ref_latest.questions if (ref_latest and not ref_latest.answers) else [])
-
-    ref_sub_scores = {}
-    ref_veto_trig = False
-    ref_veto_reasons = []
-    if ref_scoring and ref_scoring.breakdown:
-        ref_sub_scores = ref_scoring.breakdown.get("sub_scores") or ref_scoring.breakdown.get("pillar_scores") or {}
-        ref_veto_trig = bool(ref_scoring.breakdown.get("veto_triggered", False))
-        ref_veto_reasons = ref_scoring.breakdown.get("veto_reasons") or []
-
-    return ClarificationResponse(
-        request_id=str(refreshed_sub.id),
-        status=refreshed_sub.status,
-        clarification_round=ref_round_num,
-        max_rounds=MAX_CLARIFICATION_ROUNDS,
-        questions=active_questions,
-        answers=all_answers if all_answers else (ref_latest.answers if ref_latest else []),
-        score=ref_scoring.score if ref_scoring else None,
-        decision=ref_scoring.decision if ref_scoring else None,
-        sub_scores=ref_sub_scores,
-        veto_triggered=ref_veto_trig,
-        veto_reasons=ref_veto_reasons,
-        report_type=refreshed_sub.report.report_type if refreshed_sub.report else None,
-        report=refreshed_sub.report.content if refreshed_sub.report else None,
-    )
-
+    # Re-read through the shared mapper rather than re-deriving the projection
+    # here. Two behaviours change on purpose versus the previous inline block:
+    #   * rounds are sorted before picking the latest one (the GET handler always
+    #     sorted; this one did not, so an out-of-order fetch could surface a stale
+    #     round),
+    #   * a reviewer override now wins over the pipeline decision, matching the
+    #     GET handler. Returning the raw scoring decision here meant POST and GET
+    #     could report different decisions for the same overridden submission.
+    return build_clarification_response(refreshed_sub)
