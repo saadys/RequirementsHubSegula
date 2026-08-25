@@ -14,10 +14,28 @@ services:
       timeout: 5s
       retries: 5
 
-  backend:
+  # One-shot migration job. Runs to completion before the API is allowed to
+  # start, so the schema is never behind the code. Reuses the backend image
+  # (no second build) and exits; `restart: no` keeps it from looping.
+  migrate:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: requirementshub-backend
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-requirementshub}
+    volumes:
+      - ../backend:/app/backend
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    image: requirementshub-backend
     ports:
       - "8000:8000"
     env_file:
@@ -27,10 +45,13 @@ services:
     volumes:
       - ../backend:/app/backend
       - ../tests:/app/tests
-    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    # Dev-only override: --reload is not in the image default (see entrypoint).
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   frontend:

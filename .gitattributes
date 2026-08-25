@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings: a CRLF shebang makes the Linux kernel
+# look for the interpreter "/bin/sh\r", which fails with a misleading
+# "no such file or directory" on the script itself.
+*.sh text eol=lf

@@ -32,9 +32,18 @@ COPY --from=builder /app/.venv /app/.venv
 
 COPY backend /app/backend
 
+# Alembic config lives at the project root; env.py resolves the script_location
+# and imports `backend.config` for DATABASE_URL, so both must ship in the image.
+COPY alembic.ini /app/alembic.ini
+
+# --chmod is required: the build host may be Windows, which carries no exec bit.
+COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+
 USER appuser
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Roles: `migrate` (one-shot job) or `api` (default). See docker/entrypoint.sh.
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["api"]
 
