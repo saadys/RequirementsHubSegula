@@ -35,7 +35,9 @@ USE_LOCAL_LLM = os.getenv("USE_LOCAL_LLM", "false").lower() == "true"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
 LOCAL_MODEL = os.getenv("LOCAL_MODEL", "ollama/qwen3:8b")
-LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
+
+#LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
+LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "nomic-embed-text")
 
 # Retry (transient errors only: rate limits, timeouts, 5xx) before a key
 # rotation (Gemini) or a provider fallback (FallbackLLMProvider) kicks in.
@@ -57,9 +59,10 @@ MAX_CLARIFICATION_ROUNDS = int(os.getenv("MAX_CLARIFICATION_ROUNDS", "2"))
 RAG_EXACT_MATCH_THRESHOLD = float(os.getenv("RAG_EXACT_MATCH_THRESHOLD", "0.75"))
 RAG_SIMILAR_THRESHOLD = float(os.getenv("RAG_SIMILAR_THRESHOLD", "0.60"))
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
-DEFAULT_EMBEDDING_DIM = "1024" if USE_LOCAL_LLM else "768"
-EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", DEFAULT_EMBEDDING_DIM))
 
+#DEFAULT_EMBEDDING_DIM = "1024" if USE_LOCAL_LLM else "768"
+#EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", DEFAULT_EMBEDDING_DIM))
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "768"))
 # ========================= Path Config =========================
 
 DATA_DIR = os.getenv(
@@ -103,5 +106,15 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+asyncpg://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+# psycopg (used by AsyncPostgresSaver / psycopg_pool) requires a plain "postgresql://"
+# DSN — it does not understand the "+asyncpg" SQLAlchemy dialect suffix.
+CHECKPOINTER_DATABASE_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+# ========================= LangGraph Checkpointer Pool =========================
+# Separate from the SQLAlchemy pool (DB_POOL_SIZE/DB_MAX_OVERFLOW above) — keep the
+# sum of both pools under the target Postgres instance's max_connections.
+CHECKPOINTER_POOL_MIN_SIZE = int(os.getenv("CHECKPOINTER_POOL_MIN_SIZE", "2"))
+CHECKPOINTER_POOL_MAX_SIZE = int(os.getenv("CHECKPOINTER_POOL_MAX_SIZE", "5"))
 
 
