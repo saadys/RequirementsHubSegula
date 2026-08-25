@@ -47,6 +47,20 @@ config.set_main_option("sqlalchemy.url", DATABASE_URL)
 target_metadata = Base.metadata
 
 
+# Indexes created with raw SQL (pgvector HNSW) cannot be expressed on the ORM
+# model, so autogenerate sees them as "in the database but not in metadata" and
+# proposes to drop them. Excluding them keeps `alembic check` meaningful:
+# a real drift is reported, this known-managed-elsewhere object is not.
+RAW_SQL_MANAGED_INDEXES = frozenset({"idx_historic_projects_embedding_hnsw"})
+
+
+def include_object(object_, name, type_, reflected, compare_to):
+    """Filter objects that autogenerate must ignore."""
+    if type_ == "index" and name in RAW_SQL_MANAGED_INDEXES:
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """
     Offline mode: generate SQL script without connecting to DB.
@@ -59,6 +73,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -69,6 +84,7 @@ def do_run_migrations(connection):
         connection=connection,
         target_metadata=target_metadata,
         compare_type=True,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
