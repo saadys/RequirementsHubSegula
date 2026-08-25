@@ -4,7 +4,7 @@ services:
     env_file:
       - ./docker/env/.env.postgres
     ports:
-      - "5435:5432"
+      - "127.0.0.1:5435:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: unless-stopped
@@ -30,7 +30,7 @@ services:
   adminer:
     image: adminer:latest
     ports:
-      - "8085:8080"
+      - "127.0.0.1:8085:8080"
     depends_on:
       postgres:
         condition: service_healthy
