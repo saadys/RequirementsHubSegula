@@ -4,12 +4,14 @@ Clarification API Routes
 Handles multi-turn clarification loops for submissions requiring additional context via PostgreSQL / SQLAlchemy.
 """
 
+import logging
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
+from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import MAX_CLARIFICATION_ROUNDS
-from backend.graph.builder import get_compiled_graph
+from backend.graph.builder import get_compiled_graph, get_checkpointer
 from backend.models.BaseDataModel import get_db
 from backend.models.ClarificationModel import ClarificationModel
 from backend.models.FactExtractionModel import FactExtractionModel
@@ -17,6 +19,8 @@ from backend.models.ReportModel import ReportModel
 from backend.models.ScoringModel import ScoringModel
 from backend.models.SubmissionModel import SubmissionModel
 from backend.schemas import ClarificationAnswerInput, ClarificationResponse, Decision, SubmissionStatus
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/submissions", tags=["Clarification"])
 
@@ -104,7 +108,10 @@ async def get_clarification_questions(request_id: str, db: AsyncSession = Depend
     summary="Submit answers to clarification questions & re-trigger pipeline",
 )
 async def submit_clarification_answers(
-    request_id: str, payload: ClarificationAnswerInput, db: AsyncSession = Depends(get_db)
+    request_id: str,
+    payload: ClarificationAnswerInput,
+    db: AsyncSession = Depends(get_db),
+    checkpointer=Depends(get_checkpointer),
 ):
     """Submits user answers to clarification questions and re-invokes the LangGraph pipeline."""
     sub_model = SubmissionModel(db)
@@ -150,41 +157,66 @@ async def submit_clarification_answers(
         all_questions.extend(r_q)
         all_answers.extend(r_a)
 
-    form_dict = {
-        "project_name": sub.project_name,
-        "department": sub.department_id,
-        "team_contact_name": sub.team_contact_name,
-        "team_contact_email": sub.team_contact_email,
-        "problem_description": sub.problem_description,
-        "current_process": sub.current_process,
-        "expected_outcome": sub.expected_outcome,
-        "data_description": sub.data_description,
-        "deadline_urgency": sub.deadline_urgency,
-        "department_specific": sub.department_specific or {},
-    }
+    graph = get_compiled_graph(checkpointer)
+    run_config = {"configurable": {"thread_id": request_id}}
 
-    state = {
-        "request_id": str(sub.id),
-        "form_data": form_dict,
-        "department": sub.department_id or "corporate_support",
-        "uploaded_files": [],
-        "parsed_files_text": sub.parsed_files_text or [],
-        "clarification_round": curr_round_num,
-        "clarification_answers": all_answers,
-        "clarification_questions": all_questions,
-    }
+    # Resume the paused graph in-place (no re-run of parse_input/rag_search/llm_analyze)
+    # ONLY if a checkpoint actually exists for this thread_id — e.g. the submission
+    # was created before this checkpointer was deployed, or (in tests) the
+    # NEEDS_CLARIFICATION state was seeded directly in the DB without ever running
+    # the graph. In that case there is nothing to resume, so fall back to the old
+    # behavior: reconstruct the state from the DB and run the graph from START.
+    # graph.aget_state() raises ValueError outright (not an empty snapshot) when the
+    # graph was compiled with no checkpointer at all, so check that first.
+    if checkpointer is None:
+        can_resume = False
+    else:
+        existing_snapshot = await graph.aget_state(run_config)
+        can_resume = bool(existing_snapshot.values) and bool(existing_snapshot.next)
 
-    graph = get_compiled_graph()
-    updated_state = await graph.ainvoke(state)
+    if can_resume:
+        updated_state = await graph.ainvoke(Command(resume=payload.answers), run_config)
+    else:
+        logger.warning(
+            "No resumable checkpoint for submission %s — falling back to full pipeline re-run.",
+            request_id,
+        )
+        form_dict = {
+            "project_name": sub.project_name,
+            "department": sub.department_id,
+            "team_contact_name": sub.team_contact_name,
+            "team_contact_email": sub.team_contact_email,
+            "problem_description": sub.problem_description,
+            "current_process": sub.current_process,
+            "expected_outcome": sub.expected_outcome,
+            "data_description": sub.data_description,
+            "deadline_urgency": sub.deadline_urgency,
+            "department_specific": sub.department_specific or {},
+        }
+
+        state = {
+            "request_id": str(sub.id),
+            "form_data": form_dict,
+            "department": sub.department_id or "corporate_support",
+            "uploaded_files": [],
+            "parsed_files_text": sub.parsed_files_text or [],
+            "clarification_round": curr_round_num,
+            "clarification_answers": all_answers,
+            "clarification_questions": all_questions,
+        }
+        updated_state = await graph.ainvoke(state, run_config)
 
     status_str = _determine_status(updated_state)
     await sub_model.update_status(request_id, status_str)
 
     if updated_state.get("extracted_facts"):
         fact_model = FactExtractionModel(db)
+        facts_payload = dict(updated_state.get("extracted_facts") or {})
+        if updated_state.get("extracted_facts_model_used"):
+            facts_payload["llm_model_used"] = updated_state.get("extracted_facts_model_used")
         await fact_model.create_or_update(
             request_id,
-            updated_state.get("extracted_facts") or {},
+            facts_payload,
         )
 
     if updated_state.get("score") is not None or updated_state.get("decision"):
@@ -227,6 +259,7 @@ async def submit_clarification_answers(
                 round_number=next_round_num,
                 questions=updated_state.get("clarification_questions", []),
                 answers=[],
+                llm_model_used=updated_state.get("clarification_model_used"),
             )
 
     refreshed_sub = await sub_model.get_by_id_with_relations(request_id)

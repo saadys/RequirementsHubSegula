@@ -50,6 +50,7 @@ class ClarificationModel(BaseDataModel):
         round_number: int = 1,
         questions: list[str] | list[dict] | None = None,
         answers: list[str] | None = None,
+        llm_model_used: str | None = None,
         auto_commit: bool = True,
     ) -> ClarificationRound:
         """Create or update a clarification round for a submission."""
@@ -68,6 +69,8 @@ class ClarificationModel(BaseDataModel):
                 round_.questions = questions
             if answers is not None:
                 round_.answers = answers
+            if llm_model_used is not None:
+                round_.llm_model_used = llm_model_used
             if auto_commit:
                 await self.db_client.commit()
                 await self.db_client.refresh(round_)
@@ -75,7 +78,12 @@ class ClarificationModel(BaseDataModel):
                 await self.db_client.flush()
             return round_
         return await self.create_round(
-            uid, round_number, questions or [], answers or [], auto_commit=auto_commit
+            uid,
+            round_number,
+            questions or [],
+            answers or [],
+            llm_model_used=llm_model_used,
+            auto_commit=auto_commit,
         )
 
     async def update_answers(

@@ -84,9 +84,12 @@ async def _save_pipeline_state_to_db(request_id: str, state: PipelineState, fina
                 )
 
             if state.get("extracted_facts"):
+                facts_payload = dict(state.get("extracted_facts") or {})
+                if state.get("extracted_facts_model_used"):
+                    facts_payload["llm_model_used"] = state.get("extracted_facts_model_used")
                 await fact_model.create_or_update(
                     request_id,
-                    state.get("extracted_facts") or {},
+                    facts_payload,
                     auto_commit=False,
                 )
 
@@ -133,7 +136,8 @@ async def _save_pipeline_state_to_db(request_id: str, state: PipelineState, fina
                     request_id,
                     round_number=round_num,
                     questions=state.get("clarification_questions") or [],
-                    answers=[],
+                    answers=state.get("clarification_answers") or [],
+                    llm_model_used=state.get("clarification_model_used"),
                     auto_commit=False,
                 )
 
