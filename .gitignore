@@ -1,8 +1,9 @@
 # Environment & Secrets
 .env
-.env.local
-.env.*.local
+.env.*
 *.env
+docker/env/.env.postgres
+!*.example
 *.pem
 *.key
 
@@ -16,10 +17,10 @@ dist/
 build/
 
 # Virtual Environments
-.venv/
-venv/
-env/
-ENV/
+/.venv/
+/venv/
+/env/
+/ENV/
 
 # Testing, Coverage & Quality Tools
 .pytest_cache/
