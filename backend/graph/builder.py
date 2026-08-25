@@ -6,6 +6,7 @@ Constructs and compiles the full pipeline graph by wiring all nodes together.
 Owner: TOGETHER (Phase 3 — Integration)
 """
 
+from fastapi import Request
 from langgraph.graph import StateGraph, END, START
 
 from backend.contracts.state import PipelineState
@@ -17,7 +18,7 @@ from backend.nodes.rag_search import rag_search
 from backend.nodes.fast_track import fast_track
 from backend.nodes.llm_analyze import llm_analyze
 from backend.nodes.deterministic_score import deterministic_score
-from backend.nodes.generate_questions import generate_questions
+from backend.nodes.generate_questions import generate_questions, await_clarification_answers
 from backend.nodes.generate_report import generate_report
 
 # ── Routing imports ──────────────────────────────────────────────
@@ -40,6 +41,7 @@ def build_graph() -> StateGraph:
     graph.add_node("llm_analyze", llm_analyze)
     graph.add_node("deterministic_score", deterministic_score)
     graph.add_node("generate_questions", generate_questions)
+    graph.add_node("await_clarification_answers", await_clarification_answers)
     graph.add_node("generate_report", generate_report)
 
     # ── Wire edges ───────────────────────────────────────────────
@@ -87,13 +89,40 @@ def build_graph() -> StateGraph:
     # generate_report → END
     graph.add_edge("generate_report", END)
 
-    # generate_questions → END (pause for user input; graph is re-invoked later)
-    graph.add_edge("generate_questions", END)
+    # generate_questions (LLM call, produces the question set) →
+    # await_clarification_answers (pure interrupt(), no side effects) → back to
+    # llm_analyze so the answers get folded into a fresh fact extraction before
+    # re-scoring. Split into two nodes because interrupt() re-runs its containing
+    # node from the top on every resume — see generate_questions.py's docstrings.
+    # NOT a straight END: a dangling END here is what forced callers to re-run
+    # the whole graph from START on every clarification round.
+    graph.add_edge("generate_questions", "await_clarification_answers")
+    graph.add_edge("await_clarification_answers", "llm_analyze")
 
     return graph
 
 
-def get_compiled_graph():
-    """Builds and compiles the graph, returning a runnable."""
+def get_compiled_graph(checkpointer=None):
+    """Builds and compiles the graph, returning a runnable.
+
+    Args:
+        checkpointer: A LangGraph checkpointer (e.g. AsyncPostgresSaver) bound to a
+            connection pool owned by the FastAPI app lifespan. Pass None only for
+            contexts that never resume an interrupted thread (e.g. isolated unit
+            tests) — without it, generate_questions' interrupt() cannot be resumed
+            across requests since there is nowhere to persist the pause.
+    """
     graph = build_graph()
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)
+
+
+def get_checkpointer(request: Request):
+    """FastAPI dependency exposing the lifespan-owned checkpointer.
+
+    Fails fast (500, via the AttributeError below surfacing as an unhandled
+    exception) if a route tries to resume a graph before the app has finished
+    startup — this should never happen outside of a startup ordering bug, and
+    silently falling back to an in-memory or None checkpointer would instead let
+    a resumed clarification silently lose its state.
+    """
+    return request.app.state.checkpointer
