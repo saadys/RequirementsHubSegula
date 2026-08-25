@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --frozen --extra dev
+
+      # Hermetic: SQLite in-memory, external LLM calls mocked in conftest.
+      # DATABASE_URL is still required because backend.config validates it at
+      # import time; the value is never connected to by this job.
+      - name: Run unit tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/requirementshub
+        run: uv run pytest -m "not integration" -q
+
+  migrations:
+    name: Migration chain
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: requirementshub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --frozen --extra dev
+
+      # Applies the whole chain, rolls it all the way back, then re-applies it.
+      # Catches a dangling down_revision, a branched head, or a downgrade()
+      # that does not undo its upgrade() — none of which the SQLite-backed
+      # unit suite can see.
+      - name: Upgrade, downgrade, re-upgrade
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/requirementshub
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+
+      # Fails when a model was edited without a matching revision, i.e. the
+      # drift that otherwise surfaces as a runtime UndefinedColumnError.
+      - name: Detect model/migration drift
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/requirementshub
+        run: uv run alembic check
+
+  image:
+    name: Backend image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: requirementshub-backend:ci
+
+      # The image must be able to run the migration role, not just the API.
+      # `alembic heads` needs alembic.ini + the backend package to be present,
+      # so this fails loudly if either is missing from the image.
+      - name: Verify migrate role is wired
+        run: |
+          docker run --rm \
+            -e DATABASE_URL=postgresql+asyncpg://u:p@localhost:5432/db \
+            requirementshub-backend:ci \
+            alembic heads

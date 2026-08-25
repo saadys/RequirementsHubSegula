@@ -3,6 +3,11 @@
 .env.*
 *.env
 docker/env/.env.postgres
+
+# Templates are tracked on purpose (they hold no secrets).
+!*.env.example
+!.env.example
+!docker/env/.env.postgres.example
 !*.example
 *.pem
 *.key
