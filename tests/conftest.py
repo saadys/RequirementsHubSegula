@@ -38,6 +38,20 @@ from backend.graph.builder import get_checkpointer
 from backend.main import app
 
 
+@pytest.fixture(scope="module")
+def monkeypatch_module():
+    """Module-scoped monkeypatch.
+
+    pytest's built-in `monkeypatch` is function-scoped and cannot be used by
+    module-scoped fixtures (e.g. a container started once per module).
+    """
+    from _pytest.monkeypatch import MonkeyPatch
+
+    mpatch = MonkeyPatch()
+    yield mpatch
+    mpatch.undo()
+
+
 # Use in-memory SQLite for rapid async unit testing
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
