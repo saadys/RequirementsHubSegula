@@ -8,6 +8,7 @@ and identified blockers in the extracted facts.
 
 import json
 from typing import Any, AsyncIterator, Dict, List
+from langgraph.types import interrupt
 from backend.contracts.state import PipelineState
 from backend.schemas import ClarificationQuestionsModel
 from backend.services.llm import get_clarification_llm
@@ -102,18 +103,24 @@ async def stream_generate_questions(state: PipelineState) -> AsyncIterator[Dict[
             questions_payload = [q.model_dump() for q in res.questions] if hasattr(res, "questions") and res.questions else []
             if not questions_payload:
                 questions_payload = _build_fallback_questions(gaps)
+            model_used = getattr(llm, "last_model_used", None) or getattr(llm, "model_name", None)
             yield {
                 "type": "result",
                 "data": {
                     "clarification_questions": questions_payload,
                     "clarification_round": current_round + 1,
-                    "clarification_model_used": getattr(llm, "last_model_used", None),
+                    "clarification_model_used": model_used,
                 },
             }
 
 
 async def generate_questions(state: PipelineState) -> dict:
-    """Node that generates targeted clarification questions based on weak pillars and gaps."""
+    """Node that generates targeted clarification questions based on weak pillars and gaps.
+
+    Deliberately does NOT call interrupt() here — LangGraph re-runs a node from its
+    start on every resume, so pausing here would re-invoke this LLM call (cost +
+    non-determinism) each time the business team answers. The pause lives in the
+    downstream await_clarification_answers node instead, which does nothing else."""
     messages, gaps = get_generate_questions_messages(state)
     current_round = state.get("clarification_round", 0)
     llm = get_clarification_llm()
@@ -128,5 +135,26 @@ async def generate_questions(state: PipelineState) -> dict:
     return {
         "clarification_questions": questions_payload,
         "clarification_round": current_round + 1,
-        "clarification_model_used": getattr(llm, "last_model_used", None),
+        "clarification_model_used": getattr(llm, "last_model_used", None) or getattr(llm, "model_name", None),
     }
+
+
+def await_clarification_answers(state: PipelineState) -> dict:
+    """Pauses the graph (via interrupt()) until the business team submits answers.
+
+    Contains no side effects and no LLM calls by design: interrupt() re-runs its
+    containing node from the top on every resume, so anything expensive placed here
+    would re-execute on each round. On resume, folds the answers into
+    clarification_answers; the graph then loops back to llm_analyze so the new
+    answers are re-extracted into facts before re-scoring.
+    """
+    current_round = state.get("clarification_round", 0)
+    answers: List[str] = interrupt({
+        "questions": state.get("clarification_questions", []),
+        "round": current_round,
+    })
+
+    return {
+        "clarification_answers": state.get("clarification_answers", []) + list(answers or []),
+    }
+
