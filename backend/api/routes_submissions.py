@@ -14,7 +14,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.config import DATA_DIR, MAX_CLARIFICATION_ROUNDS
+from backend.config import DATA_DIR
+from backend.domain.status_policy import resolve_submission_status
 from backend.graph.builder import get_compiled_graph, get_checkpointer
 from backend.models.BaseDataModel import AsyncSessionLocal, get_db
 from backend.models.ClarificationModel import ClarificationModel
@@ -22,99 +23,13 @@ from backend.models.FactExtractionModel import FactExtractionModel
 from backend.models.ReportModel import ReportModel
 from backend.models.ScoringModel import ScoringModel
 from backend.models.SubmissionModel import SubmissionModel
+from backend.mappers.submission_mapper import build_submission_response
 from backend.models.db_schemes.requirementshub.schemes.submission import Submission
-from backend.schemas import Decision, FormSubmission, SubmissionResponse, SubmissionStatus
+from backend.schemas import FormSubmission, SubmissionResponse, SubmissionStatus
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/submissions", tags=["Submissions"])
-
-
-def entity_to_submission_response(sub: Submission) -> SubmissionResponse:
-    """Converts a Submission ORM instance and its loaded relations into a SubmissionResponse Pydantic model."""
-    scoring = sub.scoring_result
-    rep = sub.report
-    clar_rounds = sorted(sub.clarification_rounds or [], key=lambda r: r.round_number)
-    overrides = sub.reviewer_overrides or []
-    fact = sub.fact_extraction
-
-    latest_round = clar_rounds[-1] if clar_rounds else None
-    round_num = latest_round.round_number if latest_round else 0
-    decision = overrides[0].new_decision if overrides else (scoring.decision if scoring else None)
-
-    # Check if latest clarification round is already answered or completed
-    has_answered_latest = bool(latest_round and latest_round.answers and len(latest_round.answers) > 0)
-    is_clarification_done = False
-    if has_answered_latest and round_num >= MAX_CLARIFICATION_ROUNDS:
-        is_clarification_done = True
-    elif rep is not None and sub.status in ("COMPLETED", "REJECTED", "FAST_TRACK"):
-        is_clarification_done = True
-
-    active_questions = [] if (is_clarification_done or has_answered_latest) else (latest_round.questions if latest_round else [])
-
-    sub_scores = {}
-    veto_triggered = False
-    veto_reasons = []
-    if scoring and scoring.breakdown:
-        sub_scores = scoring.breakdown.get("sub_scores") or scoring.breakdown.get("pillar_scores") or {}
-        veto_triggered = bool(scoring.breakdown.get("veto_triggered", False))
-        veto_reasons = scoring.breakdown.get("veto_reasons") or []
-
-    form_data = {
-        "project_name": sub.project_name,
-        "department": sub.department_id,
-        "team_contact_name": sub.team_contact_name,
-        "team_contact_email": sub.team_contact_email,
-        "problem_description": sub.problem_description,
-        "current_process": sub.current_process,
-        "expected_outcome": sub.expected_outcome,
-        "data_description": sub.data_description,
-        "deadline_urgency": sub.deadline_urgency,
-        "department_specific": sub.department_specific or {},
-    }
-
-    created_at_str = (
-        sub.created_at.isoformat()
-        if sub.created_at and hasattr(sub.created_at, "isoformat")
-        else (str(sub.created_at) if sub.created_at else None)
-    )
-
-    return SubmissionResponse(
-        request_id=str(sub.id),
-        status=sub.status,
-        decision=decision,
-        score=scoring.score if scoring else None,
-        sub_scores=sub_scores,
-        veto_triggered=veto_triggered,
-        veto_reasons=veto_reasons,
-        report_type=rep.report_type if rep else None,
-        missing_fields=(fact.extracted_requirements if (fact and fact.extracted_requirements) else []),
-        clarification_questions=active_questions,
-        clarification_round=round_num,
-        max_rounds=MAX_CLARIFICATION_ROUNDS,
-        parsed_files_text=sub.parsed_files_text or [],
-        report=rep.content if rep else None,
-        created_at=created_at_str,
-        form_data=form_data,
-    )
-
-
-def _determine_status(result_state: Dict[str, Any]) -> str:
-    """Derives overall user-facing status from pipeline result state."""
-    if result_state.get("missing_fields"):
-        return SubmissionStatus.INCOMPLETE.value
-    if result_state.get("is_exact_match"):
-        return SubmissionStatus.FAST_TRACK.value
-    decision = result_state.get("decision")
-    if decision == Decision.GO.value:
-        return SubmissionStatus.COMPLETED.value
-    elif decision == Decision.NO_GO.value:
-        return SubmissionStatus.REJECTED.value
-    elif decision == Decision.NEEDS_CLARIFICATION.value:
-        if result_state.get("report"):
-            return SubmissionStatus.COMPLETED.value
-        return SubmissionStatus.NEEDS_CLARIFICATION.value
-    return SubmissionStatus.PROCESSED.value
 
 
 async def _execute_pipeline_in_background(
@@ -139,7 +54,7 @@ async def _execute_pipeline_in_background(
             initial_state, config={"configurable": {"thread_id": request_id}}
         )
 
-        status_str = _determine_status(result_state)
+        status_str = resolve_submission_status(result_state)
 
         async with AsyncSessionLocal() as db:
             async with db.begin():
@@ -263,7 +178,7 @@ async def submit_request(
     background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, [], checkpointer)
 
     sub = await sub_model.get_by_id_with_relations(req_uuid)
-    return entity_to_submission_response(sub or sub_entity)
+    return build_submission_response(sub or sub_entity)
 
 
 @router.post(
@@ -342,7 +257,7 @@ async def submit_request_with_files(
     background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, saved_paths, checkpointer)
 
     sub = await sub_model.get_by_id_with_relations(req_uuid)
-    return entity_to_submission_response(sub or sub_entity)
+    return build_submission_response(sub or sub_entity)
 
 
 @router.get(
@@ -361,7 +276,7 @@ async def get_all_submissions(
     if department:
         items = [s for s in items if s.department_id == department]
 
-    responses = [entity_to_submission_response(item) for item in items]
+    responses = [build_submission_response(item) for item in items]
     return responses
 
 
@@ -380,4 +295,4 @@ async def get_submission_by_id(request_id: str, db: AsyncSession = Depends(get_d
             detail=f"Submission '{request_id}' not found",
         )
 
-    return entity_to_submission_response(sub)
+    return build_submission_response(sub)

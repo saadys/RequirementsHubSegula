@@ -18,6 +18,34 @@ async def test_health_check_endpoint(async_client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_health_check_endpoint_db_failure(async_client: AsyncClient):
+    """Test GET /api/health on DB failure returns 503 and does not leak internal exception details."""
+    from unittest.mock import AsyncMock
+    from backend.main import app
+    from backend.models.BaseDataModel import get_db
+
+    mock_session = AsyncMock()
+    mock_session.execute.side_effect = RuntimeError(
+        "Internal DB host postgres:5432 connection crashed with password leaked!"
+    )
+
+    async def broken_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = broken_db
+    try:
+        response = await async_client.get("/api/health")
+        assert response.status_code == 503
+        data = response.json()
+        assert data["detail"]["status"] == "unhealthy"
+        assert data["detail"]["database"] == "disconnected"
+        assert "password leaked" not in str(data)
+        assert "postgres:5432" not in str(data)
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.mark.asyncio
 async def test_departments_endpoints(async_client: AsyncClient, seeded_department: Department):
     """Test GET /api/departments/ listing and GET /api/departments/{id}."""
     # 1. List departments

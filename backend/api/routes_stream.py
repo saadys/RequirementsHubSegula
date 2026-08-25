@@ -10,7 +10,7 @@ import json
 import logging
 import time
 import uuid
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend import config
 from backend.contracts.state import PipelineState
+from backend.domain.status_policy import resolve_submission_status
 from backend.models.BaseDataModel import AsyncSessionLocal, get_db
 from backend.models.ClarificationModel import ClarificationModel
 from backend.models.FactExtractionModel import FactExtractionModel
@@ -48,24 +49,6 @@ router = APIRouter(prefix="/submissions", tags=["Streaming"])
 def _sse_pack(event_name: str, payload: dict) -> str:
     """Formats payload as standard Server-Sent Event (SSE)."""
     return f"event: {event_name}\ndata: {json.dumps(payload)}\n\n"
-
-
-def _determine_status(result_state: Dict[str, Any]) -> str:
-    """Derives overall user-facing status from pipeline result state."""
-    if result_state.get("missing_fields"):
-        return SubmissionStatus.INCOMPLETE.value
-    if result_state.get("is_exact_match"):
-        return SubmissionStatus.FAST_TRACK.value
-    decision = result_state.get("decision")
-    if decision == Decision.GO.value:
-        return SubmissionStatus.COMPLETED.value
-    elif decision == Decision.NO_GO.value:
-        return SubmissionStatus.REJECTED.value
-    elif decision == Decision.NEEDS_CLARIFICATION.value:
-        if result_state.get("report"):
-            return SubmissionStatus.COMPLETED.value
-        return SubmissionStatus.NEEDS_CLARIFICATION.value
-    return SubmissionStatus.PROCESSED.value
 
 
 async def _save_pipeline_state_to_db(request_id: str, state: PipelineState, final_status: str):
@@ -418,7 +401,7 @@ async def _stream_pipeline_execution(
 
         yield _sse_pack("node", {"node": "generate_report", "status": "complete"})
 
-        final_status = _determine_status(state)
+        final_status = resolve_submission_status(state)
         await _save_pipeline_state_to_db(request_id, state, final_status)
 
         yield _sse_pack(
@@ -716,7 +699,7 @@ async def _stream_clarification_execution(
 
         yield _sse_pack("node", {"node": "generate_report", "status": "complete"})
 
-        final_status = _determine_status(state)
+        final_status = resolve_submission_status(state)
         await _save_pipeline_state_to_db(request_id, state, final_status)
 
         yield _sse_pack(
