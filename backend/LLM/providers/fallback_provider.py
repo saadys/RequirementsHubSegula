@@ -42,7 +42,7 @@ class FallbackLLMProvider(LLMInterface):
                 max_output_tokens=max_output_tokens,
                 temperature=temperature,
             )
-            self.last_model_used = getattr(self.primary, "last_model_used", None)
+            self.last_model_used = getattr(self.primary, "last_model_used", None) or getattr(self.primary, "model_name", None)
             return result
         except Exception as e:
             if self.fallback:
@@ -54,7 +54,7 @@ class FallbackLLMProvider(LLMInterface):
                     max_output_tokens=max_output_tokens,
                     temperature=temperature,
                 )
-                self.last_model_used = getattr(self.fallback, "last_model_used", None)
+                self.last_model_used = getattr(self.fallback, "last_model_used", None) or getattr(self.fallback, "model_name", None)
                 return result
             raise e
 
@@ -75,8 +75,9 @@ class FallbackLLMProvider(LLMInterface):
                 temperature=temperature,
             )
             async for chunk in primary_iter:
+                self.last_model_used = getattr(self.primary, "last_model_used", None) or getattr(self.primary, "model_name", None)
                 yield chunk
-            self.last_model_used = getattr(self.primary, "last_model_used", None)
+            self.last_model_used = getattr(self.primary, "last_model_used", None) or getattr(self.primary, "model_name", None)
             return
         except Exception as e:
             if self.fallback:
@@ -89,8 +90,9 @@ class FallbackLLMProvider(LLMInterface):
                     temperature=temperature,
                 )
                 async for chunk in fallback_iter:
+                    self.last_model_used = getattr(self.fallback, "last_model_used", None) or getattr(self.fallback, "model_name", None)
                     yield chunk
-                self.last_model_used = getattr(self.fallback, "last_model_used", None)
+                self.last_model_used = getattr(self.fallback, "last_model_used", None) or getattr(self.fallback, "model_name", None)
                 return
             raise e
 
@@ -108,7 +110,7 @@ class FallbackLLMProvider(LLMInterface):
                 system_prompt=system_prompt,
                 temperature=temperature,
             )
-            self.last_model_used = getattr(self.primary, "last_model_used", None)
+            self.last_model_used = getattr(self.primary, "last_model_used", None) or getattr(self.primary, "model_name", None)
             return result
         except Exception as e:
             if self.fallback:
@@ -119,7 +121,7 @@ class FallbackLLMProvider(LLMInterface):
                     system_prompt=system_prompt,
                     temperature=temperature,
                 )
-                self.last_model_used = getattr(self.fallback, "last_model_used", None)
+                self.last_model_used = getattr(self.fallback, "last_model_used", None) or getattr(self.fallback, "model_name", None)
                 return result
             raise e
 
@@ -138,8 +140,9 @@ class FallbackLLMProvider(LLMInterface):
                 temperature=temperature,
             )
             async for chunk in primary_iter:
+                self.last_model_used = getattr(self.primary, "last_model_used", None) or getattr(self.primary, "model_name", None)
                 yield chunk
-            self.last_model_used = getattr(self.primary, "last_model_used", None)
+            self.last_model_used = getattr(self.primary, "last_model_used", None) or getattr(self.primary, "model_name", None)
             return
         except Exception as e:
             if self.fallback:
@@ -151,8 +154,9 @@ class FallbackLLMProvider(LLMInterface):
                     temperature=temperature,
                 )
                 async for chunk in fallback_iter:
+                    self.last_model_used = getattr(self.fallback, "last_model_used", None) or getattr(self.fallback, "model_name", None)
                     yield chunk
-                self.last_model_used = getattr(self.fallback, "last_model_used", None)
+                self.last_model_used = getattr(self.fallback, "last_model_used", None) or getattr(self.fallback, "model_name", None)
                 return
             raise e
 

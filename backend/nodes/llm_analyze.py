@@ -66,11 +66,12 @@ async def stream_llm_analyze(state: PipelineState) -> AsyncIterator[Dict[str, An
             yield {"type": "thinking", "content": event.get("content", "")}
         elif event.get("type") == "result":
             extracted = event.get("data")
+            model_used = getattr(llm, "last_model_used", None) or getattr(llm, "model_name", None)
             yield {
                 "type": "result",
                 "data": {
                     "extracted_facts": extracted.model_dump() if hasattr(extracted, "model_dump") else extracted,
-                    "extracted_facts_model_used": getattr(llm, "last_model_used", None),
+                    "extracted_facts_model_used": model_used,
                 },
             }
 
@@ -86,5 +87,5 @@ async def llm_analyze(state: PipelineState) -> dict:
 
     return {
         "extracted_facts": result.model_dump(),
-        "extracted_facts_model_used": getattr(llm, "last_model_used", None),
+        "extracted_facts_model_used": getattr(llm, "last_model_used", None) or getattr(llm, "model_name", None),
     }

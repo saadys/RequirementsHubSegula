@@ -20,10 +20,21 @@ async def test_factor_xii_web_startup_decoupled_from_seed():
     Factor XII Compliance Test:
     Verifies that Web application startup (startup_span in main.py) ONLY initializes
     the DB engine pool and NEVER triggers RAG data seeding (load_seed_data).
+
+    The LangGraph checkpointer pool (psycopg, added alongside the SQLAlchemy engine
+    in startup_span) is mocked out here — it requires a reachable Postgres instance
+    and isn't what this test is verifying; only the seed-decoupling property is.
     """
     app = FastAPI()
+    mock_checkpointer_pool = AsyncMock()
+    mock_checkpointer_pool.open = AsyncMock()
+    mock_checkpointer = AsyncMock()
+    mock_checkpointer.setup = AsyncMock()
+
     with patch("backend.services.vectorstore.load_seed_data") as mock_load_seed, \
-         patch("backend.services.vectorstore.is_seed_data_loaded") as mock_is_loaded:
+         patch("backend.services.vectorstore.is_seed_data_loaded") as mock_is_loaded, \
+         patch("backend.main.AsyncConnectionPool", return_value=mock_checkpointer_pool), \
+         patch("backend.main.AsyncPostgresSaver", return_value=mock_checkpointer):
 
         await startup_span(app)
 

@@ -78,9 +78,9 @@ async def generate_embedding(text_input: str) -> list[float]:
     last_error: Exception | None = None
 
     if keys_to_try:
+        model_name = getattr(config, "EMBEDDING_MODEL", "models/text-embedding-004").removeprefix("models/").removeprefix("gemini/")
         for key in keys_to_try:
             try:
-                model_name = config.EMBEDDING_MODEL.removeprefix("models/").removeprefix("gemini/")
                 client = google_genai.Client(api_key=key)
                 response = client.models.embed_content(
                     model=model_name,
