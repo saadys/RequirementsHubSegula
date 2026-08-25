@@ -41,6 +41,10 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    # Spins up a throwaway pgvector PostgreSQL for tests/test_migrations.py;
+    # the SQLite unit-test engine cannot run the pgvector revision.
+    "testcontainers[postgres]>=4.0.0",
+    "psycopg2-binary>=2.9.0",
 ]
 
 [tool.pytest.ini_options]
@@ -48,3 +52,6 @@ pythonpath = ["."]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "integration: requires a real service (Docker); deselect with -m 'not integration'",
+]
