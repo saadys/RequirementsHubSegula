@@ -15,7 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPExcepti
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import DATA_DIR, MAX_CLARIFICATION_ROUNDS
-from backend.graph.builder import get_compiled_graph
+from backend.graph.builder import get_compiled_graph, get_checkpointer
 from backend.models.BaseDataModel import AsyncSessionLocal, get_db
 from backend.models.ClarificationModel import ClarificationModel
 from backend.models.FactExtractionModel import FactExtractionModel
@@ -118,9 +118,12 @@ def _determine_status(result_state: Dict[str, Any]) -> str:
 
 
 async def _execute_pipeline_in_background(
-    request_id: str, form_dict: Dict[str, Any], uploaded_file_paths: List[str]
+    request_id: str, form_dict: Dict[str, Any], uploaded_file_paths: List[str], checkpointer
 ):
-    """Executes the compiled LangGraph pipeline asynchronously in a background task."""
+    """Executes the compiled LangGraph pipeline asynchronously in a background task.
+
+    thread_id is set to request_id so a later clarification resume (see
+    routes_clarification.py) can reach this exact run's paused checkpoint."""
     try:
         initial_state = {
             "request_id": request_id,
@@ -131,8 +134,10 @@ async def _execute_pipeline_in_background(
             "clarification_answers": [],
         }
 
-        graph = get_compiled_graph()
-        result_state = await graph.ainvoke(initial_state)
+        graph = get_compiled_graph(checkpointer)
+        result_state = await graph.ainvoke(
+            initial_state, config={"configurable": {"thread_id": request_id}}
+        )
 
         status_str = _determine_status(result_state)
 
@@ -230,6 +235,7 @@ async def submit_request(
     submission: FormSubmission,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    checkpointer=Depends(get_checkpointer),
 ):
     """Submits a new AI project request as JSON, returns PENDING immediately, and executes pipeline in background."""
     form_dict = submission.model_dump()
@@ -254,7 +260,7 @@ async def submit_request(
     await sub_model.create_submission(sub_entity)
 
     # Launch pipeline in background task
-    background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, [])
+    background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, [], checkpointer)
 
     sub = await sub_model.get_by_id_with_relations(req_uuid)
     return entity_to_submission_response(sub or sub_entity)
@@ -278,6 +284,7 @@ async def submit_request_with_files(
         None, description="Single PDF file upload (Choose File)"
     ),
     db: AsyncSession = Depends(get_db),
+    checkpointer=Depends(get_checkpointer),
 ):
     """Submits form data along with uploaded files, returns PENDING immediately, and parses in background."""
     try:
@@ -332,7 +339,7 @@ async def submit_request_with_files(
     await sub_model.create_submission(sub_entity)
 
     # Launch pipeline in background task
-    background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, saved_paths)
+    background_tasks.add_task(_execute_pipeline_in_background, request_id, form_dict, saved_paths, checkpointer)
 
     sub = await sub_model.get_by_id_with_relations(req_uuid)
     return entity_to_submission_response(sub or sub_entity)
