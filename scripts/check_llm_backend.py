@@ -265,6 +265,7 @@ async def test_fallback_offline() -> None:
 
     check("connection error is retryable", is_retryable(timeout))
     check("HTTP 503 is retryable", is_retryable(server_err))
+    check("HTTP 404 (endpoint/model not found on primary) is retryable", is_retryable(_http_error(404, "Not Found")))
     check("HTTP 400 is NOT retryable", not is_retryable(bad_request))
     check("Pydantic ValidationError is NOT retryable", not is_retryable(schema_err))
     check("JSON decode error is NOT retryable", not is_retryable(ValueError("bad json")))
