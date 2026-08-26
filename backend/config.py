@@ -31,10 +31,59 @@ PRIMARY_MODEL = os.getenv("PRIMARY_MODEL", "gemini/gemini-2.5-flash")
 FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "openai/gpt-4o")
 
 
+# ── Backend Selection ────────────────────────────────────────────────
+# LLM_BACKEND names the execution target explicitly. The legacy USE_LOCAL_LLM
+# boolean could only express two states and could not distinguish a native
+# Ollama server from an OpenAI-compatible vLLM one, which speak incompatible
+# wire protocols.
+BACKEND_OLLAMA_LOCAL = "ollama_local"
+BACKEND_LIGHTNING_VLLM = "lightning_vllm"
+BACKEND_GEMINI_CLOUD = "gemini_cloud"
+BACKEND_OPENAI_CLOUD = "openai_cloud"
+BACKEND_NONE = "none"
+
+SUPPORTED_LLM_BACKENDS = (
+    BACKEND_OLLAMA_LOCAL,
+    BACKEND_LIGHTNING_VLLM,
+    BACKEND_GEMINI_CLOUD,
+    BACKEND_OPENAI_CLOUD,
+)
+
+# Legacy switch, kept so existing callers and tests keep working. It is only
+# consulted when LLM_BACKEND is unset.
 USE_LOCAL_LLM = os.getenv("USE_LOCAL_LLM", "false").lower() == "true"
+
+
+def _resolve_backend() -> str:
+    """Resolves the active backend, honouring the legacy USE_LOCAL_LLM switch."""
+    explicit = os.getenv("LLM_BACKEND", "").strip().lower()
+    if explicit:
+        return explicit
+    return BACKEND_OLLAMA_LOCAL if USE_LOCAL_LLM else BACKEND_GEMINI_CLOUD
+
+
+LLM_BACKEND = _resolve_backend()
+# BACKEND_NONE disables fallback entirely (useful to surface primary errors in tests).
+LLM_FALLBACK_BACKEND = os.getenv("LLM_FALLBACK_BACKEND", BACKEND_GEMINI_CLOUD).strip().lower()
+
+# ── Native Ollama backend (protocol: /api/chat, /api/tags) ───────────
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
-LOCAL_MODEL = os.getenv("LOCAL_MODEL", "ollama/qwen3:8b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", os.getenv("LOCAL_MODEL", "ollama/qwen3:8b"))
+# Backwards-compatible alias still referenced by the factory and tests.
+LOCAL_MODEL = OLLAMA_MODEL
+
+# ── Lightning AI vLLM backend (protocol: OpenAI /v1) ─────────────────
+# Falls back to the OLLAMA_* variables so an existing .env that pointed those
+# at a vLLM endpoint keeps working after switching LLM_BACKEND.
+VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", OLLAMA_BASE_URL)
+VLLM_API_KEY = os.getenv("VLLM_API_KEY", OLLAMA_API_KEY)
+VLLM_MODEL = os.getenv("VLLM_MODEL", os.getenv("LOCAL_MODEL", "Qwen/Qwen2.5-14B-Instruct-AWQ"))
+# Grammar-constrained JSON decoding. Disable for OpenAI-compatible servers
+# that are not vLLM (LM Studio, llama.cpp) — the provider also degrades
+# automatically on a 400 response.
+VLLM_USE_GUIDED_JSON = os.getenv("VLLM_USE_GUIDED_JSON", "true").lower() == "true"
+VLLM_GUIDED_BACKEND = os.getenv("VLLM_GUIDED_BACKEND", "xgrammar")
 
 #LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
 LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "nomic-embed-text")
@@ -43,6 +92,67 @@ LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "nomic-embed-text")
 # rotation (Gemini) or a provider fallback (FallbackLLMProvider) kicks in.
 LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
 LLM_RETRY_BASE_DELAY_SECONDS = float(os.getenv("LLM_RETRY_BASE_DELAY_SECONDS", "1"))
+# Remote GPU studios cold-start slowly; the default is generous on purpose.
+LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "120"))
+LLM_HEALTHCHECK_TIMEOUT_SECONDS = float(os.getenv("LLM_HEALTHCHECK_TIMEOUT_SECONDS", "5"))
+
+
+def validate_llm_config() -> list[str]:
+    """Returns human-readable configuration problems (empty list when valid).
+
+    Called at application startup to fail fast on a misconfigured backend
+    rather than surfacing an opaque 500 on the first user submission.
+    """
+    problems: list[str] = []
+
+    if LLM_BACKEND not in SUPPORTED_LLM_BACKENDS:
+        problems.append(
+            f"LLM_BACKEND='{LLM_BACKEND}' is not supported. "
+            f"Expected one of: {', '.join(SUPPORTED_LLM_BACKENDS)}."
+        )
+    if LLM_FALLBACK_BACKEND not in SUPPORTED_LLM_BACKENDS + (BACKEND_NONE,):
+        problems.append(
+            f"LLM_FALLBACK_BACKEND='{LLM_FALLBACK_BACKEND}' is not supported. "
+            f"Expected one of: {', '.join(SUPPORTED_LLM_BACKENDS + (BACKEND_NONE,))}."
+        )
+
+    requirements = {
+        BACKEND_GEMINI_CLOUD: (
+            bool(GEMINI_API_KEY_1 or GEMINI_API_KEY_2),
+            "GEMINI_API_KEY_1 (or GEMINI_API_KEY_2) is required",
+        ),
+        BACKEND_OPENAI_CLOUD: (bool(OPENAI_API_KEY), "OPENAI_API_KEY is required"),
+        BACKEND_LIGHTNING_VLLM: (bool(VLLM_BASE_URL), "VLLM_BASE_URL is required"),
+        BACKEND_OLLAMA_LOCAL: (bool(OLLAMA_BASE_URL), "OLLAMA_BASE_URL is required"),
+    }
+    for role, backend in (("LLM_BACKEND", LLM_BACKEND), ("LLM_FALLBACK_BACKEND", LLM_FALLBACK_BACKEND)):
+        satisfied, message = requirements.get(backend, (True, ""))
+        if not satisfied:
+            problems.append(f"{role}='{backend}': {message}.")
+
+    if LLM_BACKEND == BACKEND_LIGHTNING_VLLM:
+        # vLLM serves the OpenAI surface under /v1; without it every call 404s.
+        if not VLLM_BASE_URL.rstrip("/").endswith("/v1"):
+            problems.append(
+                f"VLLM_BASE_URL='{VLLM_BASE_URL}' should end with '/v1' "
+                "(vLLM exposes the OpenAI-compatible API under that prefix)."
+            )
+        # LocalLLMProvider adds the ollama/ prefix; OpenAICompatProvider adds
+        # openai/. A model id carrying the wrong one is routed to the wrong stack.
+        if VLLM_MODEL.startswith("ollama/"):
+            problems.append(
+                f"VLLM_MODEL='{VLLM_MODEL}' carries the 'ollama/' prefix, which routes "
+                "to the native Ollama protocol. Use the bare served model id."
+            )
+
+    if LLM_BACKEND == BACKEND_OLLAMA_LOCAL and OLLAMA_BASE_URL.rstrip("/").endswith("/v1"):
+        problems.append(
+            f"OLLAMA_BASE_URL='{OLLAMA_BASE_URL}' ends with '/v1', which is the "
+            "OpenAI-compatible surface. Use LLM_BACKEND=lightning_vllm for that, "
+            "or drop the '/v1' suffix for the native Ollama API."
+        )
+
+    return problems
 
 # ========================= Scoring Thresholds =========================
 
