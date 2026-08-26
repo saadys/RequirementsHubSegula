@@ -82,6 +82,16 @@ class PillarGovernance(BaseModel):
 class CategoricalFactExtraction(BaseModel):
     project_summary: str = Field(..., description="2-3 sentences concise technical summary of the submission.")
     identified_technique: str = Field(..., description="Recommended technical approach (e.g., 'OCR + Fuzzy Matching', 'RAG', 'Standard Python ETL Script') , 'LLM + Agentic Workflow', etc.")
+    department_relevance: Literal["RELEVANT", "PARTIALLY_RELEVANT", "UNRELATED"] = Field(
+        ...,
+        description=(
+            "RELEVANT: The project clearly falls within one of the 11 Corporate & Support Services functions "
+            "(HR, Recruitment, Finance, Procurement, IT, Admin, Legal, Communication, Quality, Training, Knowledge Management).\n"
+            "PARTIALLY_RELEVANT: The project has a Corporate Support component but also touches engineering/operational domains.\n"
+            "UNRELATED: The project is clearly an engineering, manufacturing, automotive, medical, or other domain "
+            "that does not belong to Corporate & Support Services."
+        ),
+    )
     ai_viability: PillarAIViability
     data_readiness: PillarDataReadiness
     problem_clarity: PillarProblemClarity

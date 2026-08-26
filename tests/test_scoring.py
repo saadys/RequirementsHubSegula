@@ -84,3 +84,19 @@ def test_deterministic_score_node():
     assert "ai_viability" in update["score_breakdown"]
     assert "sub_scores" in update
 
+
+
+def test_department_scope_unrelated_veto():
+    facts = {
+        "department_relevance": "UNRELATED",
+        "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "Autonomous driving computer vision"},
+        "data_readiness": {"category": "READY", "reason": "Lidar and camera datasets"},
+        "problem_clarity": {"category": "CLEAR", "reason": "Full vehicle autonomy"},
+        "integration_feasibility": {"category": "SIMPLE", "reason": "CAN bus integration"},
+        "governance_and_safety": {"category": "SAFE", "reason": "Simulated environment"},
+    }
+    result = calculate_feasibility_score(facts, [])
+    assert result["score"] <= 10
+    assert result["decision"] == "NO_GO"
+    assert result["veto_triggered"] is True
+    assert any("Department Scope VETO" in r for r in result["veto_reasons"])

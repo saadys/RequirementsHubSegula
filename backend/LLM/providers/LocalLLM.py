@@ -121,7 +121,7 @@ class LocalLLMProvider(BaseLLMProvider):
                 "model": raw_model,
                 "messages": messages,
                 "stream": True,
-                "options": {"temperature": temp},
+                "options": {"temperature": temp, "num_ctx": 16384},
             }
             if max_output_tokens:
                 req_data["options"]["num_predict"] = max_output_tokens
@@ -166,6 +166,7 @@ class LocalLLMProvider(BaseLLMProvider):
             extra_headers=self._get_extra_headers(),
             stream=True,
             timeout=120,
+            num_ctx=16384,
         )
 
         in_thinking = False
@@ -303,7 +304,7 @@ class LocalLLMProvider(BaseLLMProvider):
                 "messages": native_messages,
                 "stream": True,
                 "format": "json",
-                "options": {"temperature": temp},
+                "options": {"temperature": temp, "num_ctx": 16384},
             }
             headers = {"Content-Type": "application/json"}
             if self.api_key:
@@ -362,7 +363,8 @@ class LocalLLMProvider(BaseLLMProvider):
             api_base=self.api_base,
             extra_headers=self._get_extra_headers(),
             stream=True,
-            timeout=90,
+            timeout=120,
+            num_ctx=16384,
         )
 
         in_thinking = False
