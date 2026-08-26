@@ -72,8 +72,8 @@ AUTH_EXCEPTIONS: Tuple[type, ...] = _litellm_exc(
     "PermissionDeniedError",
 )
 
-_TRANSIENT_STATUS = frozenset({408, 429, 500, 502, 503, 504, 522, 524})
-_PERMANENT_STATUS = frozenset({400, 404, 405, 413, 422})
+_TRANSIENT_STATUS = frozenset({404, 408, 429, 500, 502, 503, 504, 522, 524})
+_PERMANENT_STATUS = frozenset({400, 405, 413, 422})
 
 
 def is_retryable(exc: BaseException) -> bool:
