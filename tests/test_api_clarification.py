@@ -36,12 +36,14 @@ def _facts(
     problem_clarity="CLEAR",
     integration="SIMPLE",
     governance="SAFE",
+    department_relevance="RELEVANT",
     summary="Mocked project summary.",
     technique="RAG + Classification",
 ) -> CategoricalFactExtraction:
     return CategoricalFactExtraction(
         project_summary=summary,
         identified_technique=technique,
+        department_relevance=department_relevance,
         ai_viability=PillarAIViability(category=ai_viability, reason="Mocked reasoning."),
         data_readiness=PillarDataReadiness(category=data_readiness, reason="Mocked reasoning."),
         problem_clarity=PillarProblemClarity(category=problem_clarity, reason="Mocked reasoning."),

@@ -108,7 +108,16 @@ def calculate_feasibility_score(
 
     veto_reasons: list[str] = []
 
+    dept_relevance = facts.get("department_relevance", "RELEVANT")
+
     # 3. Circuit Breaker Veto Gates
+    if dept_relevance == "UNRELATED":
+        total_score = min(total_score, 10)
+        veto_reasons.append(
+            "Department Scope VETO: This request does not belong to Corporate & Support Services. "
+            "Please select the appropriate department for your request."
+        )
+
     if ai_cat in ["NOT_AI", "IMPOSSIBLE"]:
         total_score = min(total_score, 18)
         veto_reasons.append(f"AI Viability VETO: {ai_cat} ({ai_reason})")

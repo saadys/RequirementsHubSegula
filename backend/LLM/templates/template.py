@@ -69,6 +69,23 @@ Classify each pillar brutally honest. the user can be wrong and dont understand 
   - `CRITICAL_RISK`: The described use case involves prohibited activity, unauthorized surveillance, sensitive profiling/inference of individuals, high-impact employment decisions based on personal data, serious privacy violations, illegal activity, or other substantial legal/ethical risk..
 - **reason**: 1-2 sentences governance and compliance assessment.
 
+### 6. Department Scope & Relevance (`department_relevance`)
+- **category** (RELEVANT | PARTIALLY_RELEVANT | UNRELATED):
+  - `RELEVANT`: The project clearly falls within one of the 11 Corporate & Support Services core functions:
+    1. Human Resources (HR / Personnel / Staffing)
+    2. Recruitment & Talent Acquisition (TA / CV Screening / Skill Matching)
+    3. Finance & Controlling (Accounting / Invoicing / Budget / Cost Management)
+    4. Procurement / Achats (Purchasing / Vendor Management / Supplier Orders)
+    5. IT Support & Infrastructure (Helpdesk / Network / Internal IT Tools)
+    6. General Administration & Facilities Management
+    7. Legal / Juridique (Contracts / IP / Compliance / GDPR)
+    8. Corporate Communication & Internal Relations
+    9. Quality & Process Compliance (Internal ISO standards / Audit Support)
+    10. Training, Upskilling & Employee Onboarding
+    11. Document Engineering & Internal Knowledge Management
+  - `PARTIALLY_RELEVANT`: The project is primarily for a Corporate Support team (e.g. HR, Finance, Procurement) but processes technical or engineering data (e.g. screening mechanical engineering CVs or extracting automotive part numbers from supplier purchase orders).
+  - `UNRELATED`: The project is clearly an operational engineering, manufacturing, automotive design, mechatronics, embedded systems, crash simulation, medical/pharma/healthcare, or other external domain that does not belong to Corporate & Support Services.
+
 ### Technical Approach & Summary
 - **identified_technique**: Specific recommended technical approach (e.g., "OCR + Fuzzy Matching", "RAG with Hybrid Vector Search", "Standard Python ETL Script (Rule-Based)" , "LLM + Agentic Workflow", etc).
 - **project_summary**: 2-3 sentences concise technical summary of the submission.

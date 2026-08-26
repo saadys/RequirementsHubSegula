@@ -119,7 +119,7 @@ async def _save_pipeline_state_to_db(request_id: str, state: PipelineState, fina
                     request_id,
                     round_number=round_num,
                     questions=state.get("clarification_questions") or [],
-                    answers=state.get("clarification_answers") or [],
+                    answers=[],
                     llm_model_used=state.get("clarification_model_used"),
                     auto_commit=False,
                 )

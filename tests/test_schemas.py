@@ -191,6 +191,7 @@ def test_5_pillar_categorical_fact_extraction():
     data = {
         "project_summary": "Automating invoice OCR and ERP line-item reconciliation.",
         "identified_technique": "OCR + Fuzzy Matching",
+        "department_relevance": "RELEVANT",
         "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "Standard NLP/OCR automation task."},
         "data_readiness": {"category": "READY", "reason": "1,200 clean PDF invoices monthly."},
         "problem_clarity": {"category": "CLEAR", "reason": "Clear inputs, outputs, and measurable KPIs."},
@@ -205,6 +206,7 @@ def test_5_pillar_categorical_fact_extraction():
     assert extraction.integration_feasibility.category == "MODERATE"
     assert extraction.governance_and_safety.category == "SAFE"
     assert extraction.identified_technique == "OCR + Fuzzy Matching"
+    assert extraction.department_relevance == "RELEVANT"
 
     # Test invalid category throws validation error
     invalid_data = data.copy()
