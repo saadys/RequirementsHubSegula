@@ -12,7 +12,8 @@ class LLMProviderEnum(str, Enum):
     OPENAI = "openai"
     MISTRAL = "mistral"
     FALLBACK = "fallback"
-    LOCAL = "local"
+    LOCAL = "local"  # Native Ollama protocol (/api/chat)
+    VLLM = "vllm"  # OpenAI-compatible server (/v1), e.g. vLLM on Lightning AI
 
 
 class LLMModelEnum(str, Enum):

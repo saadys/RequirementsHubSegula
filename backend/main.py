@@ -28,6 +28,20 @@ logger = logging.getLogger("backend.main")
 async def startup_span(app: FastAPI):
     """Tâches exécutées au démarrage de l'application (ex: connexions DB, services)."""
     logger.info("Application AI Requirement Hub starting...")
+
+    # Surface LLM misconfiguration at boot rather than as an opaque 500 on the
+    # first user submission. Warn-only: a cloud fallback may still serve traffic,
+    # and refusing to boot would take down the read-only endpoints too.
+    from backend import config as _config
+
+    for problem in _config.validate_llm_config():
+        logger.error("LLM configuration problem: %s", problem)
+    logger.info(
+        "LLM backend configured | primary=%s fallback=%s",
+        _config.LLM_BACKEND,
+        _config.LLM_FALLBACK_BACKEND,
+    )
+
     from backend.models.BaseDataModel import engine
     app.state.db_engine = engine
     logger.info("Asyncpg DB engine initialized")

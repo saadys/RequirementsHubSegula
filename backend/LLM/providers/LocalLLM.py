@@ -18,7 +18,12 @@ from backend.LLM.LLMInterfaces import T
 
 
 class LocalLLMProvider(BaseLLMProvider):
-    """Local Ollama Provider supporting text generation and Pydantic structured output."""
+    """Native Ollama provider supporting text generation and Pydantic structured output.
+
+    Speaks the *native* Ollama protocol (/api/chat, /api/tags). For an
+    OpenAI-compatible server (vLLM on Lightning AI, TGI, LM Studio) use
+    OpenAICompatProvider instead: the two wire formats are not interchangeable.
+    """
 
     def __init__(
         self,
@@ -26,9 +31,27 @@ class LocalLLMProvider(BaseLLMProvider):
         temperature: float = 0.0,
         api_base: Optional[str] = None,
     ):
+        # A model id already tagged for another litellm stack (openai/, gemini/)
+        # must not be re-prefixed into a nonsense route like "ollama/openai/...".
+        if "/" in model_name and not model_name.startswith("ollama/"):
+            raise ValueError(
+                f"LocalLLMProvider speaks the native Ollama protocol but received "
+                f"model_name='{model_name}'. Use a bare Ollama tag (e.g. 'qwen3:8b'), "
+                f"or route this model to OpenAICompatProvider "
+                f"(LLM_BACKEND=lightning_vllm)."
+            )
         clean_model = model_name if model_name.startswith("ollama/") else f"ollama/{model_name}"
         super().__init__(model_name=clean_model, temperature=temperature)
-        self.api_base = api_base or getattr(config, "OLLAMA_BASE_URL", "http://localhost:11434")
+
+        base = api_base or getattr(config, "OLLAMA_BASE_URL", "http://localhost:11434")
+        if base.rstrip("/").endswith("/v1"):
+            raise ValueError(
+                f"OLLAMA_BASE_URL='{base}' points at the OpenAI-compatible surface "
+                f"(/v1), which this provider does not speak. Set "
+                f"LLM_BACKEND=lightning_vllm for that endpoint, or drop the '/v1' "
+                f"suffix to use the native Ollama API."
+            )
+        self.api_base = base
         self.api_key = getattr(config, "OLLAMA_API_KEY", "")
 
     def _get_extra_headers(self) -> Optional[Dict[str, str]]:

@@ -47,17 +47,31 @@ def _get_genai_client() -> google_genai.Client:
 async def generate_embedding(text_input: str) -> list[float]:
     """
     Generates an embedding vector for the given text.
-    If USE_LOCAL_LLM is True, calls Ollama /api/embed using LOCAL_EMBEDDING_MODEL.
-    Otherwise, uses Gemini text-embedding via google-genai SDK.
+
+    Routes on config.LLM_BACKEND: the native Ollama backend uses /api/embed,
+    an OpenAI-compatible backend (vLLM) uses POST /embeddings. The two response
+    shapes differ, so the protocol must match the configured endpoint.
+    Falls back to Gemini text-embedding via google-genai SDK on failure.
     """
-    if config.USE_LOCAL_LLM:
+    if config.LLM_BACKEND in (config.BACKEND_OLLAMA_LOCAL, config.BACKEND_LIGHTNING_VLLM):
         import httpx
+
+        is_openai_compat = config.LLM_BACKEND == config.BACKEND_LIGHTNING_VLLM
         model_name = getattr(config, "LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
-        base_url = config.OLLAMA_BASE_URL.rstrip("/")
-        url = f"{base_url}/api/embed"
+
+        if is_openai_compat:
+            base_url = config.VLLM_BASE_URL.rstrip("/")
+            url = f"{base_url}/embeddings"
+            api_key = getattr(config, "VLLM_API_KEY", "")
+        else:
+            base_url = config.OLLAMA_BASE_URL.rstrip("/")
+            url = f"{base_url}/api/embed"
+            api_key = getattr(config, "OLLAMA_API_KEY", "")
+
         headers = {"Content-Type": "application/json"}
-        if getattr(config, "OLLAMA_API_KEY", ""):
-            headers["Authorization"] = f"Bearer {config.OLLAMA_API_KEY}"
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(
@@ -67,12 +81,24 @@ async def generate_embedding(text_input: str) -> list[float]:
                 )
                 if resp.status_code == 200:
                     data = resp.json()
-                    embeddings = data.get("embeddings", [])
-                    if embeddings:
-                        return embeddings[0]
-                logger.error("Local Ollama embedding returned status %d: %s", resp.status_code, resp.text)
+                    if is_openai_compat:
+                        # OpenAI shape: {"data": [{"embedding": [...]}]}
+                        items = data.get("data", [])
+                        if items and items[0].get("embedding"):
+                            return items[0]["embedding"]
+                    else:
+                        # Ollama shape: {"embeddings": [[...]]}
+                        embeddings = data.get("embeddings", [])
+                        if embeddings:
+                            return embeddings[0]
+                logger.error(
+                    "Self-hosted embedding (%s) returned status %d: %s",
+                    config.LLM_BACKEND,
+                    resp.status_code,
+                    resp.text,
+                )
         except Exception as exc:
-            logger.warning("Local Ollama embedding failed: %s", exc)
+            logger.warning("Self-hosted embedding (%s) failed: %s", config.LLM_BACKEND, exc)
 
     keys_to_try = [k for k in [config.GEMINI_API_KEY_1, config.GEMINI_API_KEY_2] if k]
     last_error: Exception | None = None
