@@ -64,8 +64,8 @@ async def test_rag_node_finds_similar_project():
     mock_db = AsyncMock()
 
     from backend import config
-    sim_score = min(0.99, getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60) + 0.01)
-    exact_threshold = getattr(config, "RAG_EXACT_MATCH_THRESHOLD", 0.83)
+    sim_score = min(0.99, config.RAG_SIMILAR_THRESHOLD + 0.01)
+    exact_threshold = config.RAG_EXACT_MATCH_THRESHOLD
     if sim_score >= exact_threshold:
         sim_score = exact_threshold - 0.01
 

@@ -166,13 +166,21 @@ MAX_CLARIFICATION_ROUNDS = int(os.getenv("MAX_CLARIFICATION_ROUNDS", "2"))
 
 # ========================= Vector DB Config =========================
 
-RAG_EXACT_MATCH_THRESHOLD = float(os.getenv("RAG_EXACT_MATCH_THRESHOLD", "0.75"))
-RAG_SIMILAR_THRESHOLD = float(os.getenv("RAG_SIMILAR_THRESHOLD", "0.60"))
+# Automatically determine calibrated RAG threshold defaults based on active embedding provider
+IS_LOCAL_EMBEDDING = (
+    LLM_BACKEND in (BACKEND_OLLAMA_LOCAL, BACKEND_LIGHTNING_VLLM)
+    or USE_LOCAL_LLM
+)
+
+DEFAULT_RAG_EXACT = "0.75" if IS_LOCAL_EMBEDDING else "0.82"
+DEFAULT_RAG_SIMILAR = "0.50" if IS_LOCAL_EMBEDDING else "0.70"
+
+RAG_EXACT_MATCH_THRESHOLD = float(os.getenv("RAG_EXACT_MATCH_THRESHOLD", DEFAULT_RAG_EXACT))
+RAG_SIMILAR_THRESHOLD = float(os.getenv("RAG_SIMILAR_THRESHOLD", DEFAULT_RAG_SIMILAR))
 RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
 
-#DEFAULT_EMBEDDING_DIM = "1024" if USE_LOCAL_LLM else "768"
-#EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", DEFAULT_EMBEDDING_DIM))
-EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "768"))
+DEFAULT_EMBEDDING_DIM = "1024" if IS_LOCAL_EMBEDDING else "768"
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", DEFAULT_EMBEDDING_DIM))
 # ========================= Path Config =========================
 
 DATA_DIR = os.getenv(

@@ -20,7 +20,7 @@ def fast_track(state: PipelineState) -> dict:
     contact_person = project.get("contact_person", "Segula AI Team")
     outcome = project.get("outcome", "Successful")
     
-    match_pct = int(getattr(config, "RAG_EXACT_MATCH_THRESHOLD", 0.75) * 100)
+    match_pct = int(config.RAG_EXACT_MATCH_THRESHOLD * 100)
     
     ai_techniques = project.get("ai_techniques", [])
     if isinstance(ai_techniques, list):

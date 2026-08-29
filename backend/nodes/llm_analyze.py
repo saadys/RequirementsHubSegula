@@ -29,7 +29,7 @@ def get_llm_analyze_messages(state: PipelineState) -> list:
     # Filter RAG results by similarity threshold (e.g. >= 0.60) before injecting into prompt
     similar_projects = state.get("similar_projects", [])
     rag_scores = state.get("rag_scores", [])
-    similarity_threshold = getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60)
+    similarity_threshold = config.RAG_SIMILAR_THRESHOLD
     
     filtered_projects = [
         proj for proj, score in zip(similar_projects, rag_scores)

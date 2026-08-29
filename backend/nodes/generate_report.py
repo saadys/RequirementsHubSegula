@@ -104,7 +104,7 @@ def build_static_report_markdown(state: PipelineState) -> str:
     if gov_cat == "N/A":
         gov_cat, gov_reason = _get_cat_and_reason("governance")
 
-    if best_proj and max_rag >= getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60):
+    if best_proj and max_rag >= config.RAG_SIMILAR_THRESHOLD:
         proj_info = f"- **Parent Project Match:** {best_proj.get('project_name')} (Similarity: {max_rag*100:.1f}%)"
     else:
         proj_info = f"- **RAG Similarity:** {max_rag*100:.1f}% (Novel Project)"

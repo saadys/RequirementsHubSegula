@@ -27,14 +27,25 @@ async def rag_search(state: PipelineState, db: Optional[AsyncSession] = None) ->
     """
     form_data = state.get("form_data", {})
     problem_desc = form_data.get("problem_description", "")
+    project_name = form_data.get("project_name", "")
+    expected_outcome = form_data.get("expected_outcome", "")
+    current_process = form_data.get("current_process", "")
     parsed_files = state.get("parsed_files_text", [])
 
-    # Build search query string from problem description and uploaded file content
-    query_parts = [problem_desc]
+    # Build an enriched structured query aligned with historic_projects document structure
+    query_parts = []
+    if project_name:
+        query_parts.append(f"Project: {project_name}")
+    if problem_desc:
+        query_parts.append(f"Problem: {problem_desc}")
+    if expected_outcome:
+        query_parts.append(f"Expected Outcome: {expected_outcome}")
+    if current_process:
+        query_parts.append(f"Current Process: {current_process}")
     if parsed_files:
         query_parts.extend(parsed_files)
 
-    query = " ".join(query_parts).strip()
+    query = "\n".join(query_parts).strip() if query_parts else problem_desc
 
     start_time = time.perf_counter()
     if db is None:
@@ -48,7 +59,7 @@ async def rag_search(state: PipelineState, db: Optional[AsyncSession] = None) ->
     rag_scores = []
     is_exact_match = False
     exact_match_project = None
-    similarity_threshold = getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60)
+    similarity_threshold = config.RAG_SIMILAR_THRESHOLD
 
     for doc, score, meta in results:
         score_val = float(score)

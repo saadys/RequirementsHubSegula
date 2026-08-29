@@ -32,10 +32,10 @@ def calculate_feasibility_score(
     """
     rag_scores = rag_scores or []
     max_rag = max(rag_scores) if rag_scores else 0.0
-    exact_threshold = getattr(config, "RAG_EXACT_MATCH_THRESHOLD", 0.75)
-    similar_threshold = getattr(config, "RAG_SIMILAR_THRESHOLD", 0.60)
-    go_threshold = getattr(config, "SCORE_GO_THRESHOLD", 70)
-    nogo_threshold = getattr(config, "SCORE_NOGO_THRESHOLD", 20)
+    exact_threshold = config.RAG_EXACT_MATCH_THRESHOLD
+    similar_threshold = config.RAG_SIMILAR_THRESHOLD
+    go_threshold = config.SCORE_GO_THRESHOLD
+    nogo_threshold = config.SCORE_NOGO_THRESHOLD
 
     # 1. Check Fast-Track Bypass
     if is_exact_match or max_rag >= exact_threshold:
