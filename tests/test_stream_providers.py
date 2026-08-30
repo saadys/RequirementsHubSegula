@@ -1,3 +1,5 @@
+import pytest
+pytestmark = pytest.mark.integration
 """
 Test Multi-Provider Streaming & Fallback Delegation
 Explicitly tests:

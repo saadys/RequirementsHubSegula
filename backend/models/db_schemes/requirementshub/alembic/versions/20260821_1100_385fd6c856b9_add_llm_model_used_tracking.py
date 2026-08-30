@@ -24,10 +24,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.add_column(
-        "submissions",
-        sa.Column("parsed_files_text", sa.JSON(), server_default="[]", nullable=False),
-    )
-    op.add_column(
         "fact_extractions",
         sa.Column("llm_model_used", sa.String(length=100), nullable=True),
     )
@@ -40,4 +36,3 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_column("clarification_rounds", "llm_model_used")
     op.drop_column("fact_extractions", "llm_model_used")
-    op.drop_column("submissions", "parsed_files_text")

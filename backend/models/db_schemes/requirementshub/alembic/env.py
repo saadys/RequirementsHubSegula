@@ -58,6 +58,11 @@ def include_object(object_, name, type_, reflected, compare_to):
     """Filter objects that autogenerate must ignore."""
     if type_ == "index" and name in RAW_SQL_MANAGED_INDEXES:
         return False
+    # Ignore tables and indexes managed dynamically by LangGraph PostgreSQL checkpointer
+    if type_ == "table" and name.startswith("checkpoint"):
+        return False
+    if type_ == "index" and name and any(name.startswith(p) for p in ("checkpoints", "checkpoint_")):
+        return False
     return True
 
 
@@ -92,13 +97,13 @@ def do_run_migrations(connection):
 
 async def run_async_migrations() -> None:
     """
-    Online mode: connects to the DB using async engine (asyncpg).
-    Required because SQLAlchemy async engine cannot run in sync context.
+    Online mode: create async engine and run migrations with a sync connection
+    provided by run_sync.
     """
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
-        poolclass=pool.NullPool,  # NullPool for migration: no pooling needed
+        poolclass=pool.NullPool,
     )
 
     async with connectable.connect() as connection:

@@ -1,3 +1,5 @@
+import pytest
+pytestmark = pytest.mark.integration
 """
 tests/test_llm_model_tracking.py
 Unit and Integration tests for llm_model_used tracking during streaming and DB persistence.

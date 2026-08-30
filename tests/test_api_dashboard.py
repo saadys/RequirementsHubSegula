@@ -179,6 +179,7 @@ async def test_ingest_historic_project_validation_error(async_client: AsyncClien
 async def test_ingest_historic_project_success(async_client: AsyncClient, seeded_department):
     """Test successful ingestion of a completed project into pgvector knowledge base."""
     from unittest.mock import patch
+    from backend.config import EMBEDDING_DIMENSION
 
     # 1. Create a submission first
     payload = {
@@ -210,7 +211,7 @@ async def test_ingest_historic_project_success(async_client: AsyncClient, seeded
         "lessons_learned": "Lighting variations compensated with real-time histogram equalization.",
     }
 
-    with patch("backend.services.vectorstore.generate_embedding", return_value=[0.02] * 768):
+    with patch("backend.services.vectorstore.generate_embedding", return_value=[0.02] * EMBEDDING_DIMENSION):
         ingest_res = await async_client.post(
             f"/api/dashboard/{req_id}/ingest-historic",
             json=ingest_payload,
@@ -221,7 +222,8 @@ async def test_ingest_historic_project_success(async_client: AsyncClient, seeded
     assert ingest_data["request_id"] == req_id
     assert ingest_data["historic_id"].startswith("HIST-2026-")
     assert ingest_data["status"] == "IMPLEMENTED"
-    assert ingest_data["embedding_dimension"] == 768
+    from backend.config import EMBEDDING_DIMENSION
+    assert ingest_data["embedding_dimension"] == EMBEDDING_DIMENSION
 
     # 3. Verify submission status updated to IMPLEMENTED
     sub_res = await async_client.get(f"/api/submissions/{req_id}")

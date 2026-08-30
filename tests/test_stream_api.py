@@ -1,3 +1,5 @@
+import pytest
+pytestmark = pytest.mark.integration
 """
 Test SSE Streaming API Endpoint (POST /api/submissions/stream)
 Verifies:

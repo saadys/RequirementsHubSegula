@@ -1,3 +1,5 @@
+import pytest
+pytestmark = pytest.mark.integration
 """Tests for LLM structured output extraction (5 Pillars). Owner: Track A"""
 
 import pytest
