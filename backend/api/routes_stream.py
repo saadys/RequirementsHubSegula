@@ -40,6 +40,7 @@ from backend.nodes.rag_search import rag_search
 from backend.nodes.validate_completeness import validate_completeness
 from backend.schemas import ClarificationAnswerInput, Decision, FormSubmission, SubmissionStatus
 from backend.services.llm import get_streaming_llm
+from backend.services.queue_manager import queue_manager
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +145,15 @@ async def _stream_pipeline_execution(
     }
 
     try:
+        # ── 0. Concurrency Queue Slot Acquisition ───────────────────
+        async for queue_event in queue_manager.acquire_slot(request_id):
+            yield _sse_pack("queue_status", queue_event)
+            if queue_event.get("status") == "QUEUE_FULL":
+                yield _sse_pack("error", {"message": queue_event.get("message", "Server queue is full")})
+                return
+            if queue_event.get("status") == "PROCESSING":
+                break
+
         # ── 1. parse_input ──────────────────────────────────────────
         yield _sse_pack("node", {"node": "parse_input", "status": "running"})
         t0 = time.perf_counter()
@@ -420,6 +430,8 @@ async def _stream_pipeline_execution(
         async with AsyncSessionLocal() as db:
             sub_model = SubmissionModel(db)
             await sub_model.update_status(request_id, "FAILED")
+    finally:
+        await queue_manager.release_slot(request_id)
 
 
 @router.post(
@@ -466,6 +478,91 @@ async def submit_request_stream(
     )
 
 
+@router.post(
+    "/submit-async",
+    summary="Fast non-blocking submission with instant queue assignment (avoids browser connection limits)",
+)
+async def submit_request_async(
+    submission: FormSubmission,
+    db: AsyncSession = Depends(get_db),
+):
+    """Instantly registers a submission in database and queue without holding open HTTP connections."""
+    form_dict = submission.model_dump()
+    req_uuid = uuid.uuid4()
+    request_id = str(req_uuid)
+
+    sub_model = SubmissionModel(db)
+    sub_entity = Submission(
+        id=req_uuid,
+        project_name=submission.project_name,
+        department_id=submission.department or "corporate_support",
+        team_contact_name=submission.team_contact_name,
+        team_contact_email=submission.team_contact_email,
+        problem_description=submission.problem_description,
+        current_process=submission.current_process,
+        expected_outcome=submission.expected_outcome,
+        data_description=submission.data_description,
+        deadline_urgency=submission.deadline_urgency or "low",
+        department_specific=submission.department_specific or {},
+        status=SubmissionStatus.PENDING.value,
+    )
+    await sub_model.create_submission(sub_entity)
+
+    queue_info = await queue_manager.register_submission(request_id)
+    return {
+        "request_id": request_id,
+        "status": queue_info.get("status"),
+        "queue": queue_info,
+    }
+
+
+@router.get(
+    "/{request_id}/queue-status",
+    summary="Check real-time queue position for a submitted requirement",
+)
+async def get_queue_status(request_id: str):
+    """Returns current position and estimated remaining seconds in queue."""
+    return await queue_manager.get_request_status(request_id)
+
+
+@router.get(
+    "/{request_id}/stream",
+    summary="Stream pipeline execution for an already registered submission",
+)
+async def stream_registered_submission(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Initiates live SSE streaming pipeline for a registered request whose slot is ready."""
+    sub_model = SubmissionModel(db)
+    sub = await sub_model.get_by_id(request_id)
+    if not sub:
+        raise HTTPException(status_code=404, detail=f"Submission '{request_id}' not found")
+
+    form_dict = {
+        "project_name": sub.project_name,
+        "department": sub.department_id,
+        "team_contact_name": sub.team_contact_name,
+        "team_contact_email": sub.team_contact_email,
+        "problem_description": sub.problem_description,
+        "current_process": sub.current_process,
+        "expected_outcome": sub.expected_outcome,
+        "data_description": sub.data_description,
+        "deadline_urgency": sub.deadline_urgency,
+        "department_specific": sub.department_specific or {},
+    }
+
+    return StreamingResponse(
+        _stream_pipeline_execution(request_id, form_dict),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 async def _stream_clarification_execution(
     request_id: str, payload_answers: List[str]
 ) -> AsyncGenerator[str, None]:
@@ -475,6 +572,15 @@ async def _stream_clarification_execution(
     """
     loop = asyncio.get_running_loop()
     try:
+        # ── 0. Concurrency Queue Slot Acquisition ───────────────────
+        async for queue_event in queue_manager.acquire_slot(request_id):
+            yield _sse_pack("queue_status", queue_event)
+            if queue_event.get("status") == "QUEUE_FULL":
+                yield _sse_pack("error", {"message": queue_event.get("message", "Server queue is full")})
+                return
+            if queue_event.get("status") == "PROCESSING":
+                break
+
         async with AsyncSessionLocal() as db:
             sub_model = SubmissionModel(db)
             sub = await sub_model.get_by_id_with_relations(request_id)
@@ -722,6 +828,8 @@ async def _stream_clarification_execution(
         async with AsyncSessionLocal() as db:
             sub_model = SubmissionModel(db)
             await sub_model.update_status(request_id, "FAILED")
+    finally:
+        await queue_manager.release_slot(request_id)
 
 
 @router.post(

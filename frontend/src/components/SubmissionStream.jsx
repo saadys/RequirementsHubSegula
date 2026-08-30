@@ -17,7 +17,8 @@ import {
   HelpCircle,
   MessageSquareText,
 } from 'lucide-react';
-import { submitRequestStream, submitClarificationStream, fetchSubmissionById } from '../api/client';
+import { submitRequestStream, submitRequestAsync, fetchQueueStatus, streamSubmissionById, submitClarificationStream, fetchSubmissionById } from '../api/client';
+import QueueStatusBanner from './QueueStatusBanner';
 
 const BASE_PIPELINE_NODES = [
   { id: 'parse_input', label: 'Input Ingestion & Validation', desc: 'Parsing submission fields & text' },
@@ -45,6 +46,7 @@ export default function SubmissionStream({
   const [isComplete, setIsComplete] = useState(false);
   const [finalData, setFinalData] = useState(null);
   const [error, setError] = useState(null);
+  const [queueStatus, setQueueStatus] = useState(payload?._initialQueue || null);
 
   const thinkingContainerRef = useRef(null);
   const userHasScrolledUp = useRef(false);
@@ -116,7 +118,9 @@ export default function SubmissionStream({
     async function runStream() {
       try {
         const streamHandler = async ({ event, data }) => {
-          if (event === 'node') {
+          if (event === 'queue_status') {
+            setQueueStatus(data);
+          } else if (event === 'node') {
             const { node, status, duration_ms, ...rest } = data;
             setCurrentNode(node);
             setNodeStates((prev) => ({
@@ -162,11 +166,44 @@ export default function SubmissionStream({
             controller.signal
           );
         } else if (payload) {
-          await submitRequestStream(
-            payload,
-            streamHandler,
-            controller.signal
-          );
+          // 1. Fast non-blocking queue registration
+          let reqId = payload._registeredRequestId;
+          let initialQueue = payload._initialQueue;
+
+          if (!reqId) {
+            const regRes = await submitRequestAsync(payload);
+            reqId = regRes.request_id;
+            initialQueue = regRes.queue || regRes;
+          }
+
+          if (initialQueue) {
+            setQueueStatus(initialQueue);
+          }
+
+          // 2. If queued, poll queue status until slot is available (without holding open connections)
+          if (initialQueue && initialQueue.status === 'QUEUED') {
+            while (!controller.signal.aborted) {
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              if (controller.signal.aborted) break;
+
+              try {
+                const qUpdate = await fetchQueueStatus(reqId);
+                if (qUpdate) {
+                  setQueueStatus(qUpdate);
+                  if (qUpdate.status === 'PROCESSING') {
+                    break;
+                  }
+                }
+              } catch (pollErr) {
+                console.warn('Queue status polling warning:', pollErr);
+              }
+            }
+          }
+
+          // 3. Initiate SSE streaming execution once slot is allocated
+          if (!controller.signal.aborted && reqId) {
+            await streamSubmissionById(reqId, streamHandler, controller.signal);
+          }
         }
       } catch (err) {
         if (!controller.signal.aborted) {
@@ -283,6 +320,8 @@ export default function SubmissionStream({
           )}
         </div>
       </div>
+
+      <QueueStatusBanner queueStatus={queueStatus} />
 
       {error && (
         <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '12px', padding: '16px 20px', color: '#FCA5A5', display: 'flex', alignItems: 'center', gap: '12px' }}>

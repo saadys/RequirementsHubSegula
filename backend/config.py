@@ -242,3 +242,8 @@ CHECKPOINTER_POOL_MIN_SIZE = int(os.getenv("CHECKPOINTER_POOL_MIN_SIZE", "2"))
 CHECKPOINTER_POOL_MAX_SIZE = int(os.getenv("CHECKPOINTER_POOL_MAX_SIZE", "5"))
 
 
+
+# ========================= Concurrency & Real-Time Queue Config =========================
+MAX_CONCURRENT_SUBMISSIONS = int(os.getenv("MAX_CONCURRENT_SUBMISSIONS", "5"))
+MAX_QUEUE_CAPACITY = int(os.getenv("MAX_QUEUE_CAPACITY", "20"))
+ESTIMATED_ANALYSIS_SECONDS = int(os.getenv("ESTIMATED_ANALYSIS_SECONDS", "35"))

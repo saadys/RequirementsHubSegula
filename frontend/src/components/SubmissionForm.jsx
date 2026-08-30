@@ -14,7 +14,7 @@ import {
   Sparkles,
   Zap
 } from 'lucide-react';
-import { fetchDepartmentFields, submitRequest, submitRequestWithUpload, pollSubmissionUntilComplete } from '../api/client';
+import { fetchDepartmentFields, submitRequest, submitRequestAsync, submitRequestWithUpload, pollSubmissionUntilComplete } from '../api/client';
 import DepartmentSelector from './DepartmentSelector';
 import SubmissionStream from './SubmissionStream';
 
@@ -171,9 +171,23 @@ export default function SubmissionForm({ departments, onSubmissionSuccess, onOpe
       department: selectedDept,
     };
 
-    // If Real-Time Streaming is active (and no PDF file upload attached), stream directly
+    // If Real-Time Streaming is active (and no PDF file upload attached), fast-register queue
     if (streamMode && !attachedFile) {
-      setStreamingPayload(payload);
+      try {
+        setSubmitting(true);
+        const regRes = await submitRequestAsync(payload);
+        const reqId = regRes.request_id;
+        const initQueue = regRes.queue || regRes;
+        setStreamingPayload({
+          ...payload,
+          _registeredRequestId: reqId,
+          _initialQueue: initQueue,
+        });
+      } catch (err) {
+        setError(err.message || 'Failed to submit AI project request');
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 

@@ -167,3 +167,71 @@ async def test_streaming_endpoint_clarification_handling():
                                 stream_completed = True
 
                     assert stream_completed is True
+
+
+@pytest.mark.asyncio
+async def test_streaming_endpoint_emits_queue_status():
+    """Verifies that POST /api/submissions/stream emits 'event: queue_status' with processing/queued status."""
+    async with httpx.AsyncClient(base_url="http://localhost:8000") as ac:
+        payload = {
+            "project_name": "Queue Status SSE Test",
+            "department": "corporate_support",
+            "team_contact_name": "Queue Tester",
+            "team_contact_email": "queue@segula.fr",
+            "problem_description": "Testing queue status event emission",
+            "current_process": "Manual queue inspection",
+            "expected_outcome": "Automated queue event check",
+            "data_description": "Sample test data",
+            "deadline_urgency": "low",
+        }
+        async with ac.stream("POST", "/api/submissions/stream", json=payload, timeout=30.0) as response:
+            assert response.status_code == 200
+            assert "text/event-stream" in response.headers.get("content-type", "")
+
+            received_events = []
+            current_event = None
+            async for line in response.aiter_lines():
+                line = line.strip()
+                if line.startswith("event:"):
+                    current_event = line[6:].strip()
+                elif line.startswith("data:") and current_event:
+                    data = json.loads(line[5:].strip())
+                    received_events.append({"event": current_event, "data": data})
+
+            queue_events = [e for e in received_events if e["event"] == "queue_status"]
+            assert len(queue_events) >= 1, "Expected at least 1 queue_status event in SSE stream"
+            first_q_event = queue_events[0]["data"]
+            assert first_q_event["status"] in ("PROCESSING", "QUEUED")
+            assert "active_slots" in first_q_event
+            assert "max_slots" in first_q_event
+
+
+@pytest.mark.asyncio
+async def test_async_queue_submission_and_polling():
+    """Verifies POST /api/submissions/submit-async and GET /{id}/queue-status for decoupled queuing."""
+    async with httpx.AsyncClient(base_url="http://localhost:8000") as ac:
+        payload = {
+            "project_name": "Async Decoupled Queue Test",
+            "department": "corporate_support",
+            "team_contact_name": "Async Tester",
+            "team_contact_email": "async@segula.fr",
+            "problem_description": "Testing non-blocking queue submission",
+            "current_process": "Manual registration",
+            "expected_outcome": "Immediate queue assignment",
+            "data_description": "Sample test data",
+            "deadline_urgency": "low",
+        }
+        res = await ac.post("/api/submissions/submit-async", json=payload)
+        assert res.status_code == 200
+        data = res.json()
+        assert "request_id" in data
+        assert data["status"] in ("PROCESSING", "QUEUED")
+        req_id = data["request_id"]
+
+        # Check queue-status endpoint
+        q_res = await ac.get(f"/api/submissions/{req_id}/queue-status")
+        assert q_res.status_code == 200
+        q_data = q_res.json()
+        assert q_data["status"] in ("PROCESSING", "QUEUED")
+        assert "active_slots" in q_data
+        assert "max_slots" in q_data

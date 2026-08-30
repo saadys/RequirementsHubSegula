@@ -77,30 +77,7 @@ export async function submitRequest(submissionPayload) {
   });
 }
 
-export async function submitRequestStream(payload, onEvent, signal) {
-  const url = `${BASE_URL}/submissions/stream`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'text/event-stream',
-    },
-    body: JSON.stringify(payload),
-    signal,
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    let message = `Stream failed with status ${response.status}`;
-    try {
-      const parsed = JSON.parse(errorText);
-      message = parsed.detail || message;
-    } catch {
-      message = errorText || message;
-    }
-    throw new Error(message);
-  }
-
+async function _consumeEventStream(response, onEvent) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
@@ -135,6 +112,69 @@ export async function submitRequestStream(payload, onEvent, signal) {
       }
     }
   }
+}
+
+export async function submitRequestAsync(payload) {
+  return request('/submissions/submit-async', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchQueueStatus(requestId) {
+  return request(`/submissions/${requestId}/queue-status`);
+}
+
+export async function streamSubmissionById(requestId, onEvent, signal) {
+  const url = `${BASE_URL}/submissions/${requestId}/stream`;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'text/event-stream',
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let message = `Stream failed with status ${response.status}`;
+    try {
+      const parsed = JSON.parse(errorText);
+      message = parsed.detail || message;
+    } catch {
+      message = errorText || message;
+    }
+    throw new Error(message);
+  }
+
+  await _consumeEventStream(response, onEvent);
+}
+
+export async function submitRequestStream(payload, onEvent, signal) {
+  const url = `${BASE_URL}/submissions/stream`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+    },
+    body: JSON.stringify(payload),
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    let message = `Stream failed with status ${response.status}`;
+    try {
+      const parsed = JSON.parse(errorText);
+      message = parsed.detail || message;
+    } catch {
+      message = errorText || message;
+    }
+    throw new Error(message);
+  }
+
+  await _consumeEventStream(response, onEvent);
 }
 
 export async function submitRequestWithUpload(formData) {
