@@ -58,6 +58,7 @@ connect_args = {}
 if any(k in DATABASE_URL for k in ("pooler.supabase.com", "neon.tech", "ssl=require", "sslmode=require")):
     connect_args["statement_cache_size"] = 0
     connect_args["prepared_statement_cache_size"] = 0
+    connect_args["ssl"] = "require"
 
 engine: AsyncEngine = create_async_engine(
     DATABASE_URL,
