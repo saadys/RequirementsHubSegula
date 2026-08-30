@@ -23,6 +23,9 @@ def get_llm_analyze_messages(state: PipelineState) -> list:
     # Append parsed file content to problem description if available
     if parsed_files:
         files_text = "\n\n### Uploaded File Attachments:\n" + "\n---\n".join(parsed_files)
+        # Cap attachment text at 15k characters (~3500 tokens) to guarantee safety
+        if len(files_text) > 15000:
+            files_text = files_text[:15000] + "\n\n... [Attachment content truncated for context budget] ..."
         existing_problem = form_data.get("problem_description", "")
         form_data["problem_description"] = f"{existing_problem}\n{files_text}".strip()
 

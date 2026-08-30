@@ -146,10 +146,18 @@ class LLMProviderFactory:
             return primary
 
         fallback = LLMProviderFactory._build_fallback(temperature)
+        if fallback is None:
+            logger.info(
+                "LLM pipeline initialised (Sovereign Pure Mode) | backend=%s (%s) fallback=disabled",
+                config.LLM_BACKEND,
+                getattr(primary, "model_name", "?"),
+            )
+            return primary
+
         logger.info(
             "LLM pipeline initialised | primary=%s (%s) fallback=%s",
             config.LLM_BACKEND,
             getattr(primary, "model_name", "?"),
-            getattr(fallback, "model_name", None) if fallback else "disabled",
+            getattr(fallback, "model_name", None),
         )
         return FallbackLLMProvider(primary_provider=primary, fallback_provider=fallback)

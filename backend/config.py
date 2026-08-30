@@ -63,8 +63,14 @@ def _resolve_backend() -> str:
 
 
 LLM_BACKEND = _resolve_backend()
-# BACKEND_NONE disables fallback entirely (useful to surface primary errors in tests).
-LLM_FALLBACK_BACKEND = os.getenv("LLM_FALLBACK_BACKEND", BACKEND_GEMINI_CLOUD).strip().lower()
+
+# Pure sovereign default: when on local models, fallback is disabled (none) unless explicitly overridden.
+IS_LOCAL_BACKEND = (
+    LLM_BACKEND in (BACKEND_OLLAMA_LOCAL, BACKEND_LIGHTNING_VLLM)
+    or USE_LOCAL_LLM
+)
+DEFAULT_FALLBACK = BACKEND_NONE if IS_LOCAL_BACKEND else BACKEND_GEMINI_CLOUD
+LLM_FALLBACK_BACKEND = os.getenv("LLM_FALLBACK_BACKEND", DEFAULT_FALLBACK).strip().lower()
 
 # ── Native Ollama backend (protocol: /api/chat, /api/tags) ───────────
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
