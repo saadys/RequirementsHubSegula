@@ -74,7 +74,7 @@ LLM_FALLBACK_BACKEND = os.getenv("LLM_FALLBACK_BACKEND", DEFAULT_FALLBACK).strip
 
 # ── Native Ollama backend (protocol: /api/chat, /api/tags) ───────────
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "")
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", os.getenv("VLLM_API_KEY", ""))
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", os.getenv("LOCAL_MODEL", "ollama/qwen3:8b"))
 # Backwards-compatible alias still referenced by the factory and tests.
 LOCAL_MODEL = OLLAMA_MODEL

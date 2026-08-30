@@ -69,6 +69,7 @@ jobs:
             VLLM_API_KEY=${{ secrets.VLLM_API_KEY }}
             VLLM_MODEL=${{ secrets.VLLM_MODEL || 'casperhansen/deepseek-r1-distill-qwen-14b-awq' }}
             OLLAMA_BASE_URL=${{ secrets.OLLAMA_BASE_URL }}
+            OLLAMA_API_KEY=${{ secrets.OLLAMA_API_KEY || secrets.VLLM_API_KEY }}
             LOCAL_EMBEDDING_MODEL=qwen3-embedding:0.6b
             MAX_CONCURRENT_SUBMISSIONS=5
             MAX_QUEUE_CAPACITY=20
