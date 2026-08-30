@@ -100,13 +100,15 @@ async def run_async_migrations() -> None:
     Online mode: create async engine and run migrations with a sync connection
     provided by run_sync.
     """
+    connect_args = {"statement_cache_size": 0, "prepared_statement_cache_size": 0}
+    if any(k in DATABASE_URL for k in ("pooler.supabase.com", "neon.tech", "ssl=require", "sslmode=require")):
+        connect_args["ssl"] = "require"
+
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
-        connect_args = {"statement_cache_size": 0, "prepared_statement_cache_size": 0}
-    if any(k in DATABASE_URL for k in ("pooler.supabase.com", "neon.tech", "ssl=require", "sslmode=require")):
-        connect_args["ssl"] = "require",
+        connect_args=connect_args,
     )
 
     async with connectable.connect() as connection:

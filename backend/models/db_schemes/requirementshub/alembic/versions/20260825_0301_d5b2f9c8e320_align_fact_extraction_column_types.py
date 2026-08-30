@@ -68,6 +68,7 @@ def upgrade() -> None:
         "historic_projects",
         "embedding",
         existing_type=Vector(768),
+        type_=Vector(1024),
         existing_nullable=True,
         comment="Cosine embedding from Gemini text-embedding-004",
     )
@@ -77,10 +78,10 @@ def downgrade() -> None:
     op.alter_column(
         "historic_projects",
         "embedding",
-        existing_type=Vector(768),
+        existing_type=Vector(1024),
+        type_=Vector(768),
         existing_nullable=True,
-        comment=None,
-        existing_comment="Cosine embedding from Gemini text-embedding-004",
+        comment="Cosine embedding from Gemini text-embedding-004",
     )
     op.alter_column(
         "fact_extractions",
@@ -96,6 +97,7 @@ def downgrade() -> None:
         existing_type=sa.Text(),
         type_=sa.VARCHAR(length=100),
         existing_nullable=True,
+        postgresql_using="SUBSTRING(ai_technique_identified FROM 1 FOR 100)",
     )
     op.alter_column(
         "fact_extractions",
@@ -103,4 +105,5 @@ def downgrade() -> None:
         existing_type=sa.Text(),
         type_=sa.VARCHAR(length=200),
         existing_nullable=True,
+        postgresql_using="SUBSTRING(identified_technique FROM 1 FOR 200)",
     )

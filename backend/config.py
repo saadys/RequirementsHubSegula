@@ -204,7 +204,7 @@ DEPARTMENT_CONFIGS_PATH = os.getenv(
 
 # ========================= DataBase Config =========================
 
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip().strip(""").strip("'")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip().strip('"').strip("'")
 
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
