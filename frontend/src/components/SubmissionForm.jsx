@@ -148,21 +148,48 @@ export default function SubmissionForm({ departments, onSubmissionSuccess, onOpe
     }
   };
 
+  const isFormValid = Boolean(
+    formData.project_name?.trim() &&
+    formData.team_contact_name?.trim() &&
+    formData.team_contact_email?.trim() &&
+    formData.problem_description?.trim() &&
+    formData.current_process?.trim() &&
+    formData.expected_outcome?.trim() &&
+    formData.data_description?.trim() &&
+    formData.deadline_urgency
+  );
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
 
-    // Basic validation
+    // Form validation
     if (!formData.project_name.trim()) {
       setError('Please enter a Project Name.');
       return;
     }
     if (!formData.team_contact_name.trim() || !formData.team_contact_email.trim()) {
-      setError('Please provide contact name and email.');
+      setError('Please provide contact person name and email.');
       return;
     }
     if (!formData.problem_description.trim()) {
       setError('Please describe the problem you want AI to solve.');
+      return;
+    }
+    if (!formData.current_process.trim()) {
+      setError('Please describe the Current Manual Process.');
+      return;
+    }
+    if (!formData.expected_outcome.trim()) {
+      setError('Please specify the Expected Outcome / Target Benefit.');
+      return;
+    }
+    if (!formData.data_description.trim()) {
+      setError('Please describe the Available Data.');
+      return;
+    }
+    if (!formData.deadline_urgency) {
+      setError('Please select Project Urgency / Deadline.');
       return;
     }
 
@@ -328,7 +355,7 @@ export default function SubmissionForm({ departments, onSubmissionSuccess, onOpe
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
-              Current Manual Process
+              Current Manual Process *
             </label>
             <textarea 
               className="glass-input" 
@@ -336,12 +363,13 @@ export default function SubmissionForm({ departments, onSubmissionSuccess, onOpe
               placeholder="How is this handled today? (e.g. Manual SharePoint search and email inquiries)"
               value={formData.current_process}
               onChange={(e) => handleInputChange('current_process', e.target.value)}
+              required
             />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
-              Expected Outcome / Target Benefit
+              Expected Outcome / Target Benefit *
             </label>
             <textarea 
               className="glass-input" 
@@ -349,6 +377,7 @@ export default function SubmissionForm({ departments, onSubmissionSuccess, onOpe
               placeholder="What is the desired result? (e.g. Instant conversational HR bot answering in under 10 sec)"
               value={formData.expected_outcome}
               onChange={(e) => handleInputChange('expected_outcome', e.target.value)}
+              required
             />
           </div>
         </div>
@@ -357,7 +386,7 @@ export default function SubmissionForm({ departments, onSubmissionSuccess, onOpe
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
-              Available Data Description
+              Available Data Description *
             </label>
             <input 
               type="text" 
@@ -365,17 +394,19 @@ export default function SubmissionForm({ departments, onSubmissionSuccess, onOpe
               placeholder="e.g. 500 PDF policy documents and FAQ tables"
               value={formData.data_description}
               onChange={(e) => handleInputChange('data_description', e.target.value)}
+              required
             />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#CBD5E1', marginBottom: '6px' }}>
-              Project Urgency / Deadline
+              Project Urgency / Deadline *
             </label>
             <select 
               className="glass-input"
               value={formData.deadline_urgency}
               onChange={(e) => handleInputChange('deadline_urgency', e.target.value)}
+              required
             >
               <option value="low" style={{ background: '#0F172A' }}>Low (Planning phase)</option>
               <option value="medium" style={{ background: '#0F172A' }}>Medium (Targeted this quarter)</option>
@@ -596,8 +627,16 @@ export default function SubmissionForm({ departments, onSubmissionSuccess, onOpe
         <button
           type="submit"
           className="btn-primary"
-          disabled={submitting}
-          style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '1rem' }}
+          disabled={submitting || !isFormValid}
+          style={{ 
+            width: '100%', 
+            justifyContent: 'center', 
+            padding: '14px', 
+            fontSize: '1rem',
+            opacity: (!isFormValid || submitting) ? 0.6 : 1,
+            cursor: (!isFormValid || submitting) ? 'not-allowed' : 'pointer'
+          }}
+          title={!isFormValid ? 'Please fill in all required fields to submit' : 'Submit Requirement'}
         >
           {submitting ? (
             <>
