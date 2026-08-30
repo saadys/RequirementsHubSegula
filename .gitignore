@@ -83,3 +83,5 @@ tests/generated_local_report.md
 *generated_local_report.md
 scripts/
 PROJECT_END_TO_END.md
+output2.md
+stress_test_concurrency.py

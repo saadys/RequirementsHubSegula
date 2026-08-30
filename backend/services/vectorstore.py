@@ -53,20 +53,15 @@ async def generate_embedding(text_input: str) -> list[float]:
     shapes differ, so the protocol must match the configured endpoint.
     Falls back to Gemini text-embedding via google-genai SDK on failure.
     """
-    if config.LLM_BACKEND in (config.BACKEND_OLLAMA_LOCAL, config.BACKEND_LIGHTNING_VLLM):
+    if config.LLM_BACKEND in (config.BACKEND_OLLAMA_LOCAL, config.BACKEND_LIGHTNING_VLLM) or config.USE_LOCAL_LLM:
         import httpx
 
-        is_openai_compat = config.LLM_BACKEND == config.BACKEND_LIGHTNING_VLLM
         model_name = getattr(config, "LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
-
-        if is_openai_compat:
-            base_url = config.VLLM_BASE_URL.rstrip("/")
-            url = f"{base_url}/embeddings"
-            api_key = getattr(config, "VLLM_API_KEY", "")
-        else:
-            base_url = config.OLLAMA_BASE_URL.rstrip("/")
-            url = f"{base_url}/api/embed"
-            api_key = getattr(config, "OLLAMA_API_KEY", "")
+        # In sovereign setup, embeddings are served by Ollama (or dedicated proxy /api/embed)
+        base_url = getattr(config, "OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        url = f"{base_url}/api/embed"
+        api_key = getattr(config, "OLLAMA_API_KEY", "")
+        is_openai_compat = False
 
         headers = {"Content-Type": "application/json"}
         if api_key:

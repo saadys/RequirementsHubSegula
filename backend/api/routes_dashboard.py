@@ -1,3 +1,4 @@
+from backend import config
 """
 AI Team Dashboard API Routes
 
@@ -199,7 +200,7 @@ async def ingest_delivered_project(
             historic_id=historic_id,
             project_name=record.project_name,
             status=SubmissionStatus.IMPLEMENTED.value,
-            embedding_dimension=768,
+            embedding_dimension=getattr(config, "EMBEDDING_DIMENSION", 1024),
             message="Project successfully vectorized and ingested into knowledge base.",
         )
     except Exception as exc:
