@@ -67,7 +67,9 @@ jobs:
             LLM_BACKEND=${{ secrets.LLM_BACKEND || 'lightning_vllm' }}
             VLLM_BASE_URL=${{ secrets.VLLM_BASE_URL }}
             VLLM_API_KEY=${{ secrets.VLLM_API_KEY }}
+            VLLM_MODEL=${{ secrets.VLLM_MODEL || 'casperhansen/deepseek-r1-distill-qwen-14b-awq' }}
             OLLAMA_BASE_URL=${{ secrets.OLLAMA_BASE_URL }}
+            LOCAL_EMBEDDING_MODEL=qwen3-embedding:0.6b
             MAX_CONCURRENT_SUBMISSIONS=5
             MAX_QUEUE_CAPACITY=20
             ESTIMATED_ANALYSIS_SECONDS=35

@@ -84,7 +84,7 @@ LOCAL_MODEL = OLLAMA_MODEL
 # at a vLLM endpoint keeps working after switching LLM_BACKEND.
 VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", OLLAMA_BASE_URL)
 VLLM_API_KEY = os.getenv("VLLM_API_KEY", OLLAMA_API_KEY)
-VLLM_MODEL = os.getenv("VLLM_MODEL", os.getenv("LOCAL_MODEL", "Qwen/Qwen2.5-14B-Instruct-AWQ"))
+VLLM_MODEL = os.getenv("VLLM_MODEL", os.getenv("LOCAL_MODEL", "casperhansen/deepseek-r1-distill-qwen-14b-awq"))
 # Grammar-constrained JSON decoding. Disable for OpenAI-compatible servers
 # that are not vLLM (LM Studio, llama.cpp) — the provider also degrades
 # automatically on a 400 response.
@@ -92,7 +92,7 @@ VLLM_USE_GUIDED_JSON = os.getenv("VLLM_USE_GUIDED_JSON", "true").lower() == "tru
 VLLM_GUIDED_BACKEND = os.getenv("VLLM_GUIDED_BACKEND", "xgrammar")
 
 #LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
-LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "nomic-embed-text")
+LOCAL_EMBEDDING_MODEL = os.getenv("LOCAL_EMBEDDING_MODEL", "qwen3-embedding:0.6b")
 
 # Retry (transient errors only: rate limits, timeouts, 5xx) before a key
 # rotation (Gemini) or a provider fallback (FallbackLLMProvider) kicks in.
