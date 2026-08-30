@@ -41,7 +41,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Override sqlalchemy.url with our config (avoids hardcoding in alembic.ini)
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
+config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 
 # This is used by --autogenerate to detect schema differences
 target_metadata = Base.metadata
