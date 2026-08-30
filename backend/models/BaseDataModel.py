@@ -54,6 +54,11 @@ def to_uuid(val: str | uuid.UUID | Any) -> uuid.UUID | None:
 # pool_pre_ping=True: validates connection before use (handles DB restarts)
 # pool_recycle: re-establishes stale connections before DB drops them (e.g. Cloud SQL limits)
 # pool_size & max_overflow: managed via ENV variables to handle Cloud Run auto-scaling
+connect_args = {}
+if any(k in DATABASE_URL for k in ("pooler.supabase.com", "neon.tech", "ssl=require", "sslmode=require")):
+    connect_args["statement_cache_size"] = 0
+    connect_args["prepared_statement_cache_size"] = 0
+
 engine: AsyncEngine = create_async_engine(
     DATABASE_URL,
     echo=False,
@@ -62,6 +67,7 @@ engine: AsyncEngine = create_async_engine(
     max_overflow=DB_MAX_OVERFLOW,
     pool_timeout=DB_POOL_TIMEOUT,
     pool_recycle=DB_POOL_RECYCLE,
+    connect_args=connect_args,
 )
 
 # ── Session factory ──────────────────────────────────────────────────────────

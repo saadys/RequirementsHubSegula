@@ -233,7 +233,13 @@ elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("p
 
 # psycopg (used by AsyncPostgresSaver / psycopg_pool) requires a plain "postgresql://"
 # DSN — it does not understand the "+asyncpg" SQLAlchemy dialect suffix.
-CHECKPOINTER_DATABASE_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
+# psycopg (used by AsyncPostgresSaver / psycopg_pool) requires a plain "postgresql://"
+# DSN and requires "sslmode=require" instead of "ssl=require".
+CHECKPOINTER_DATABASE_URL = (
+    DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
+    .replace("?ssl=require", "?sslmode=require")
+    .replace("&ssl=require", "&sslmode=require")
+)
 
 # ========================= LangGraph Checkpointer Pool =========================
 # Separate from the SQLAlchemy pool (DB_POOL_SIZE/DB_MAX_OVERFLOW above) — keep the

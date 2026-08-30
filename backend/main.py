@@ -58,24 +58,33 @@ async def startup_span(app: FastAPI):
     # Running this app natively on Windows (not WSL/Docker) requires either
     # `asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())`
     # before the event loop starts, or running under WSL/Docker instead.
-    checkpointer_pool = AsyncConnectionPool(
-        conninfo=CHECKPOINTER_DATABASE_URL,
-        min_size=CHECKPOINTER_POOL_MIN_SIZE,
-        max_size=CHECKPOINTER_POOL_MAX_SIZE,
-        kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
-        open=False,
-    )
-    await checkpointer_pool.open()
-    app.state.checkpointer_pool = checkpointer_pool
+    try:
+        checkpointer_pool = AsyncConnectionPool(
+            conninfo=CHECKPOINTER_DATABASE_URL,
+            min_size=CHECKPOINTER_POOL_MIN_SIZE,
+            max_size=CHECKPOINTER_POOL_MAX_SIZE,
+            kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+            open=False,
+        )
+        await checkpointer_pool.open()
+        app.state.checkpointer_pool = checkpointer_pool
 
-    checkpointer = AsyncPostgresSaver(checkpointer_pool)
-    await checkpointer.setup()
-    app.state.checkpointer = checkpointer
-    logger.info(
-        "LangGraph Postgres checkpointer pool initialized (min=%d, max=%d)",
-        CHECKPOINTER_POOL_MIN_SIZE,
-        CHECKPOINTER_POOL_MAX_SIZE,
-    )
+        checkpointer = AsyncPostgresSaver(checkpointer_pool)
+        await checkpointer.setup()
+        app.state.checkpointer = checkpointer
+        logger.info(
+            "LangGraph Postgres checkpointer pool initialized (min=%d, max=%d)",
+            CHECKPOINTER_POOL_MIN_SIZE,
+            CHECKPOINTER_POOL_MAX_SIZE,
+        )
+    except Exception as e:
+        logger.warning(
+            "LangGraph Postgres checkpointer pool failed (%s), falling back to MemorySaver",
+            e,
+        )
+        from langgraph.checkpoint.memory import MemorySaver
+        app.state.checkpointer = MemorySaver()
+        app.state.checkpointer_pool = None
 
 
 async def shutdown_span(app: FastAPI):
