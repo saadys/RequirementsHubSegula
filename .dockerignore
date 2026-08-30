@@ -35,9 +35,10 @@ htmlcov/
 .ruff_cache/
 .mypy_cache/
 
-# 5. Frontend (Excluded from Backend Container Image)
-frontend/
+# 5. Frontend Local Caches & Dependencies
 **/node_modules/
+frontend/dist/
+frontend/.cache/
 
 # 6. Local Runtime Data, Databases & Uploads
 data/*.db
@@ -54,3 +55,4 @@ docs_internship/
 old_ai_projects_docs/
 zsystem/
 *.pdf
+*.log

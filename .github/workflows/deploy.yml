@@ -1,0 +1,77 @@
+name: Deploy to GCP Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION || 'europe-west1' }}
+  SERVICE_NAME: ${{ secrets.GCP_SERVICE_NAME || 'segula-ai-hub' }}
+  GAR_REPO: ${{ secrets.GCP_GAR_REPO || 'segula-hub-repo' }}
+
+jobs:
+  deploy:
+    name: Build, Push & Deploy to Cloud Run
+    runs-on: ubuntu-latest
+    if: github.repository_owner != ''
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and Push Unified Production Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPO }}/${{ env.SERVICE_NAME }}:latest
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPO }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          flags: |
+            --allow-unauthenticated
+            --port=8080
+            --cpu=2
+            --memory=2Gi
+            --concurrency=150
+            --min-instances=0
+            --max-instances=5
+            --timeout=300
+          env_vars: |
+            DATABASE_URL=${{ secrets.DATABASE_URL }}
+            LLM_BACKEND=${{ secrets.LLM_BACKEND || 'lightning_vllm' }}
+            VLLM_BASE_URL=${{ secrets.VLLM_BASE_URL }}
+            VLLM_API_KEY=${{ secrets.VLLM_API_KEY }}
+            OLLAMA_BASE_URL=${{ secrets.OLLAMA_BASE_URL }}
+            MAX_CONCURRENT_SUBMISSIONS=5
+            MAX_QUEUE_CAPACITY=20
+            ESTIMATED_ANALYSIS_SECONDS=35
+
+      - name: Show Cloud Run Service URL
+        run: |
+          echo "🚀 Deployed successfully to Cloud Run URL: ${{ steps.deploy.outputs.url }}"

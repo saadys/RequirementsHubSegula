@@ -131,3 +131,28 @@ app.add_middleware(
 
 # Inclure les routeurs
 app.include_router(api_router)
+
+
+# =============================================================================
+# Serve Frontend Static Build (Production Unified Container Mode for Cloud Run)
+# =============================================================================
+static_dir = os.getenv("STATIC_DIR", "/app/frontend_dist")
+if os.path.isdir(static_dir):
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    assets_dir = os.path.join(static_dir, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api/") or full_path == "api":
+            return {"detail": "Not Found"}
+        file_path = os.path.join(static_dir, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_file = os.path.join(static_dir, "index.html")
+        if os.path.isfile(index_file):
+            return FileResponse(index_file)
+        return {"detail": "Frontend index.html not found"}

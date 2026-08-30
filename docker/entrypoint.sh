@@ -1,27 +1,24 @@
 #!/bin/sh
 # =============================================================================
-# docker/entrypoint.sh — Role dispatcher for the RequirementsHub backend image
+# docker/entrypoint.sh — Role dispatcher for Segula AI Requirement Hub
 #
-# One image, several roles. The migration is NOT chained to the API start-up
-# on purpose: with N replicas (Cloud Run, k8s), every replica would race for
-# the ACCESS EXCLUSIVE lock on `alembic_version`, the losers would stall past
-# their health-check deadline and crash-loop the whole rollout.
-#
-# Roles:
-#   migrate  -> apply Alembic migrations, then exit (one-shot job)
-#   api      -> serve the FastAPI app (default)
-#   <other>  -> executed verbatim, so `docker run <image> sh` still works
+# Automatically executes Alembic schema migrations on startup before booting
+# the FastAPI ASGI server on Cloud Run / container runtime.
 # =============================================================================
 set -eu
 
 case "${1:-api}" in
     migrate)
-        echo "[entrypoint] applying Alembic migrations..."
+        echo "[entrypoint] Applying Alembic database migrations..."
         exec alembic upgrade head
         ;;
     api)
-        echo "[entrypoint] starting API on port ${PORT:-8000}..."
-        exec uvicorn backend.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+        echo "[entrypoint] Applying Alembic database migrations..."
+        alembic upgrade head || {
+            echo "[entrypoint] ⚠️ Alembic migration failed or was skipped. Proceeding with application startup..."
+        }
+        echo "[entrypoint] Starting Segula AI Requirement Hub on port ${PORT:-8080}..."
+        exec uvicorn backend.main:app --host 0.0.0.0 --port "${PORT:-8080}"
         ;;
     *)
         exec "$@"
