@@ -47,6 +47,7 @@ class MockSuccessProvider(BaseLLMProvider):
                 problem_clarity=PillarProblemClarity(category="CLEAR", reason="Clear scope"),
                 integration_feasibility=PillarIntegration(category="SIMPLE", reason="API integration"),
                 governance_and_safety=PillarGovernance(category="SAFE", reason="No privacy risks"),
+                target_sub_function="HR_PERSONNEL",
                 department_relevance="RELEVANT",
                 identified_technique="NLP / LLM",
                 project_summary="Valid AI project request.",

@@ -38,6 +38,7 @@ def _facts(
     problem_clarity="CLEAR",
     integration="SIMPLE",
     governance="SAFE",
+    target_sub_function="FINANCE_CONTROLLING",
     department_relevance="RELEVANT",
     summary="Mocked project summary.",
     technique="RAG + Classification",
@@ -45,6 +46,7 @@ def _facts(
     return CategoricalFactExtraction(
         project_summary=summary,
         identified_technique=technique,
+        target_sub_function=target_sub_function,
         department_relevance=department_relevance,
         ai_viability=PillarAIViability(category=ai_viability, reason="Mocked AI viability reasoning."),
         data_readiness=PillarDataReadiness(category=data_readiness, reason="Mocked data readiness reasoning."),
@@ -85,7 +87,7 @@ async def test_graph_e2e_deterministic_go_flow():
     assert final_state.get("decision") in ["GO", "FAST_TRACK"]
     assert final_state.get("score") >= 70
     assert "report" in final_state
-    assert "# 📋 AI Project Feasibility Dossier" in final_state["report"]
+    assert ("# 📋 AI Project Feasibility Dossier" in final_state["report"] or "# 🚀 Fast Track Evaluation" in final_state["report"])
     assert final_state.get("veto_triggered") is False
     assert "sub_scores" in final_state
 

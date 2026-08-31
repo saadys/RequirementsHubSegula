@@ -36,6 +36,7 @@ def _facts(
     problem_clarity="CLEAR",
     integration="SIMPLE",
     governance="SAFE",
+    target_sub_function="HR_PERSONNEL",
     department_relevance="RELEVANT",
     summary="Mocked project summary.",
     technique="RAG + Classification",
@@ -43,6 +44,7 @@ def _facts(
     return CategoricalFactExtraction(
         project_summary=summary,
         identified_technique=technique,
+        target_sub_function=target_sub_function,
         department_relevance=department_relevance,
         ai_viability=PillarAIViability(category=ai_viability, reason="Mocked reasoning."),
         data_readiness=PillarDataReadiness(category=data_readiness, reason="Mocked reasoning."),
