@@ -98,8 +98,8 @@ CorporateSubFunction = Literal[
 class CategoricalFactExtraction(BaseModel):
     project_summary: str = Field(..., description="2-3 sentences concise technical summary of the submission.")
     identified_technique: str = Field(..., description="Recommended technical approach (e.g., 'OCR + Fuzzy Matching', 'RAG', 'Standard Python ETL Script') , 'LLM + Agentic Workflow', etc.")
-    target_sub_function: Optional[CorporateSubFunction] = Field(
-        default=None,
+    target_sub_function: CorporateSubFunction = Field(
+        ...,
         description=(
             "HR_PERSONNEL: Human Resources, employee lifecycle, personnel administration.\n"
             "RECRUITMENT_TALENT_ACQUISITION: Candidate screening, job matching, CV parsing.\n"
@@ -133,9 +133,9 @@ class CategoricalFactExtraction(BaseModel):
 
     @field_validator("target_sub_function", mode="before")
     @classmethod
-    def normalize_target_sub_function(cls, v: Any) -> Optional[str]:
-        if v is None:
-            return None
+    def normalize_target_sub_function(cls, v: Any) -> str:
+        if v is None or v == "":
+            raise ValueError("target_sub_function is required and cannot be null.")
         s = str(v).strip().upper()
         if "ENGINEERING" in s or "MECHANICAL" in s or "AUTOMOTIVE" in s or "CAD" in s or "FEA" in s or "SIMULATION" in s:
             return "OUT_OF_SCOPE_ENGINEERING"

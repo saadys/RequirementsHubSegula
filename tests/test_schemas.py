@@ -191,6 +191,7 @@ def test_5_pillar_categorical_fact_extraction():
     data = {
         "project_summary": "Automating invoice OCR and ERP line-item reconciliation.",
         "identified_technique": "OCR + Fuzzy Matching",
+        "target_sub_function": "FINANCE_CONTROLLING",
         "department_relevance": "RELEVANT",
         "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "Standard NLP/OCR automation task."},
         "data_readiness": {"category": "READY", "reason": "1,200 clean PDF invoices monthly."},

@@ -23,6 +23,7 @@ import re
 import time
 import urllib.request
 from typing import Any, AsyncIterator, Dict, List, Optional, Type
+from pydantic import ValidationError
 
 import litellm
 
@@ -63,7 +64,7 @@ class OpenAICompatProvider(BaseLLMProvider):
         return self.model_name.removeprefix("openai/")
 
     def _base_kwargs(self, messages: List[Dict[str, str]], temp: float) -> Dict[str, Any]:
-        return {
+        kwargs: Dict[str, Any] = {
             "model": self.model_name,
             "messages": messages,
             "temperature": temp,
@@ -71,6 +72,9 @@ class OpenAICompatProvider(BaseLLMProvider):
             "api_key": self.api_key,
             "timeout": self.timeout,
         }
+        if temp == 0.0 or temp == 0:
+            kwargs["top_p"] = 1.0
+        return kwargs
 
     def _retry_kwargs(self) -> Dict[str, Any]:
         return {
@@ -304,53 +308,87 @@ class OpenAICompatProvider(BaseLLMProvider):
         temp = temperature if temperature is not None else self.default_temperature
         messages = self._with_instruction(messages, self._json_instruction(response_schema))
         start_time = time.perf_counter()
+        last_error: Exception | None = None
 
-        response = await litellm.acompletion(
-            **self._base_kwargs(messages, temp),
-            **self._structured_kwargs(response_schema),
-            stream=True,
-        )
+        for attempt in range(config.LLM_MAX_RETRIES + 1):
+            try:
+                response = await litellm.acompletion(
+                    **self._base_kwargs(messages, temp),
+                    **self._structured_kwargs(response_schema),
+                    stream=True,
+                )
 
-        splitter = _ThinkTagSplitter()
-        json_accumulated = ""
+                splitter = _ThinkTagSplitter()
+                json_accumulated = ""
 
-        async for chunk in response:
-            if not chunk.choices or not chunk.choices[0].delta:
-                continue
-            delta = chunk.choices[0].delta
+                async for chunk in response:
+                    if not chunk.choices or not chunk.choices[0].delta:
+                        continue
+                    delta = chunk.choices[0].delta
 
-            reasoning = getattr(delta, "reasoning_content", None)
-            if reasoning:
-                yield {"type": "thinking", "content": reasoning}
+                    reasoning = getattr(delta, "reasoning_content", None)
+                    if reasoning:
+                        yield {"type": "thinking", "content": reasoning}
 
-            content = getattr(delta, "content", "") or ""
-            if not content:
-                continue
+                    content = getattr(delta, "content", "") or ""
+                    if not content:
+                        continue
 
-            # Thinking is streamed to the client; the JSON body is buffered
-            # until complete, since a partial object cannot be validated.
-            for event in splitter.feed(content):
-                if event["type"] == "thinking":
-                    yield event
+                    # Thinking is streamed to the client; the JSON body is buffered
+                    # until complete, since a partial object cannot be validated.
+                    for event in splitter.feed(content):
+                        if event["type"] == "thinking":
+                            yield event
+                        else:
+                            json_accumulated += event["content"]
+
+                for event in splitter.flush():
+                    if event["type"] == "thinking":
+                        yield event
+                    else:
+                        json_accumulated += event["content"]
+
+                self.logger.info(
+                    "vLLM structured stream completed | model=%s schema=%s duration_ms=%.2f attempt=%d",
+                    self.model_name,
+                    response_schema.__name__,
+                    round((time.perf_counter() - start_time) * 1000, 2),
+                    attempt,
+                )
+
+                validated = self._validate(self._clean_json_string(json_accumulated), response_schema)
+                self.last_model_used = self.model_name
+                yield {"type": "result", "data": validated}
+                return
+
+            except (ValidationError, json.JSONDecodeError, Exception) as exc:
+                last_error = exc
+                if _is_bad_request(exc):
+                    raise
+                if attempt < config.LLM_MAX_RETRIES:
+                    self.logger.warning(
+                        "Structured output streaming attempt %d failed validation (%s); retrying with self-correction feedback",
+                        attempt + 1,
+                        exc,
+                    )
+                    yield {
+                        "type": "thinking",
+                        "content": f"\n\n[Schema Validation Notice: Output was incomplete or missing required fields. Re-evaluating schema constraints (attempt {attempt + 1})...]\n",
+                    }
+                    corrective_msg = (
+                        f"Your previous output failed Pydantic schema validation with error:\n{exc}\n\n"
+                        f"CRITICAL: You MUST output a complete, valid JSON object matching the required schema. "
+                        f"Ensure all required fields (e.g. 'target_sub_function') are present."
+                    )
+                    messages.append({"role": "assistant", "content": json_accumulated})
+                    messages.append({"role": "user", "content": corrective_msg})
                 else:
-                    json_accumulated += event["content"]
-
-        for event in splitter.flush():
-            if event["type"] == "thinking":
-                yield event
-            else:
-                json_accumulated += event["content"]
-
-        self.logger.info(
-            "vLLM structured stream completed | model=%s schema=%s duration_ms=%.2f",
-            self.model_name,
-            response_schema.__name__,
-            round((time.perf_counter() - start_time) * 1000, 2),
-        )
-
-        validated = self._validate(self._clean_json_string(json_accumulated), response_schema)
-        self.last_model_used = self.model_name
-        yield {"type": "result", "data": validated}
+                    self.logger.error(
+                        "All %d structured streaming attempts failed validation: %s",
+                        config.LLM_MAX_RETRIES + 1,
+                        exc,
+                    )
+                    raise last_error
 
     def health_check(self) -> bool:
         """Probes GET /models - the OpenAI-compatible liveness endpoint."""

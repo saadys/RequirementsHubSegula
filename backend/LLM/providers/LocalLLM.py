@@ -9,6 +9,7 @@ import re
 import time
 import urllib.request
 from typing import Any, AsyncIterator, Dict, List, Optional, Type
+from pydantic import ValidationError
 import httpx
 import litellm
 
@@ -439,9 +440,16 @@ class LocalLLMProvider(BaseLLMProvider):
         )
 
         clean_content = self._clean_json_string(json_accumulated)
-        validated_result = self._validate_schema_content(clean_content, response_schema)
-        self.last_model_used = self.model_name
-        yield {"type": "result", "data": validated_result}
+        try:
+            validated_result = self._validate_schema_content(clean_content, response_schema)
+            self.last_model_used = self.model_name
+            yield {"type": "result", "data": validated_result}
+        except Exception as exc:
+            self.logger.warning("Local LLM stream failed validation (%s); attempting self-healing fallback", exc)
+            yield {"type": "thinking", "content": f"\n\n[Schema Validation Notice: Re-evaluating JSON constraints...]\n"}
+            # Attempt one non-streaming repair call
+            repair_result = await self.generate_structured_output(prompt=prompt, response_schema=response_schema, system_prompt=system_prompt, temperature=temp)
+            yield {"type": "result", "data": repair_result}
 
     async def generate_structured_output(
         self,
