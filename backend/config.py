@@ -206,10 +206,10 @@ DEPARTMENT_CONFIGS_PATH = os.getenv(
 
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip().strip('"').strip("'")
 
-DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
-DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
-DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
-DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "1800"))
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "2"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "3"))
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "15"))
+DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "300"))
 
 INSTANCE_CONNECTION_NAME = os.getenv("INSTANCE_CONNECTION_NAME", "")
 if not DATABASE_URL and INSTANCE_CONNECTION_NAME:
@@ -244,8 +244,8 @@ CHECKPOINTER_DATABASE_URL = (
 # ========================= LangGraph Checkpointer Pool =========================
 # Separate from the SQLAlchemy pool (DB_POOL_SIZE/DB_MAX_OVERFLOW above) — keep the
 # sum of both pools under the target Postgres instance's max_connections.
-CHECKPOINTER_POOL_MIN_SIZE = int(os.getenv("CHECKPOINTER_POOL_MIN_SIZE", "2"))
-CHECKPOINTER_POOL_MAX_SIZE = int(os.getenv("CHECKPOINTER_POOL_MAX_SIZE", "5"))
+CHECKPOINTER_POOL_MIN_SIZE = int(os.getenv("CHECKPOINTER_POOL_MIN_SIZE", "1"))
+CHECKPOINTER_POOL_MAX_SIZE = int(os.getenv("CHECKPOINTER_POOL_MAX_SIZE", "2"))
 
 
 
