@@ -93,6 +93,13 @@ Classify each pillar brutally honest. the user can be wrong and dont understand 
 ## Critical Rules
 1. **Architectural Reasoning**: Begin by writing your thorough step-by-step reasoning across each of the 5 pillars inside `<think>...</think>` tags before outputting the final structured JSON object.
 2. **Honesty over optimism**: If a project does not need AI, classify AI viability as `NOT_AI`, any project who have GDPR COMPLIANCE ISSUES AND VIOLATIONS is `CRITICAL_RISK` directly.
+3. **Strict Categorical Enums (Crucial)**: In the final JSON, you must strictly output only the allowed category strings:
+   - `ai_viability`: "HIGHLY_VIABLE" | "MARGINAL" | "NOT_AI" | "IMPOSSIBLE"
+   - `data_readiness`: "READY" | "UNLABELED_OR_MESSY" | "NONE"
+   - `problem_clarity`: "CLEAR" | "PARTIAL" | "CONTRADICTORY" | "VAGUE"
+   - `integration_feasibility`: "SIMPLE" | "MODERATE" | "COMPLEX" (Never use "NONE" or "VAGUE" here; if no integration needed, use "SIMPLE")
+   - `governance_and_safety`: "SAFE" | "MODERATE_RISK" | "CRITICAL_RISK" (Never use "NONE" or "VAGUE" here; if no risks, use "SAFE")
+   - `department_relevance`: "RELEVANT" | "PARTIALLY_RELEVANT" | "UNRELATED"
 3. **Evidence-based**: Every category and reason must be supported by the user's input.
 4. **Completeness**: Fill all 5 pillars accurately."""
 
