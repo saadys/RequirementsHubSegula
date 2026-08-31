@@ -10,9 +10,9 @@ export PATH="/usr/local/bin:$PATH"
 export HF_HOME="/teamspace/studios/this_studio/hf_cache"
 export OLLAMA_MODELS="/teamspace/studios/this_studio/ollama_models"
 export OLLAMA_HOST="127.0.0.1:11434"
-export OLLAMA_NUM_PARALLEL=8
-export OLLAMA_MAX_QUEUE=64
-export OLLAMA_KEEP_ALIVE="-1"
+export OLLAMA_NUM_PARALLEL=4
+export OLLAMA_MAX_QUEUE=32
+export OLLAMA_KEEP_ALIVE="24h"
 export OLLAMA_FLASH_ATTENTION=1
 
 mkdir -p "$HF_HOME" "$OLLAMA_MODELS"
@@ -30,30 +30,15 @@ pkill -f "vllm" 2>/dev/null || true
 pkill -f "proxy_server.py" 2>/dev/null || true
 sleep 2
 
-# 4. Démarrage garanti d'Ollama (Embeddings) & Téléchargement Plug & Play
-echo "🚀 1/3 Starting Ollama for embeddings (Port 11434)..."
-ollama serve > ollama.log 2>&1 &
-
-echo "⏳ Waiting for Ollama engine to be ready..."
-until curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; do
-    sleep 1
-done
-echo "✅ Ollama is ready on port 11434!"
-
-# Téléchargement automatique garanti du modèle d'embedding (Plug & Play)
-echo "📦 Ensuring embedding model (qwen3-embedding:0.6b) is available..."
-ollama pull qwen3-embedding:0.6b
-echo "🔥 Pre-warming Qwen3-Embedding in GPU VRAM (Keep-Alive: Permanent)..."
-curl -s http://127.0.0.1:11434/api/embed -d '{"model": "qwen3-embedding:0.6b", "input": "Segula Warmup", "keep_alive": -1}' > /dev/null 2>&1 || true
-
-# 5. Démarrage de vLLM avec modèle AWQ persistant (Port 8001)
-echo "🚀 2/3 Starting vLLM with DeepSeek-R1 14B AWQ (Port 8001)..."
+# 4. Démarrage de vLLM avec modèle AWQ persistant (Port 8001)
+# gpu-memory-utilization=0.78 alloue ~11.3 GiB sur T4 (14.6 GiB), laissant ~3.3 GiB libres pour Ollama et CUDA
+echo "🚀 1/3 Starting vLLM with DeepSeek-R1 14B AWQ (Port 8001)..."
 vllm serve casperhansen/deepseek-r1-distill-qwen-14b-awq \
     --download-dir "$HF_HOME" \
     --host 127.0.0.1 \
     --port 8001 \
     --max-model-len 8192 \
-    --gpu-memory-utilization 0.85 \
+    --gpu-memory-utilization 0.78 \
     --max-num-seqs 16 \
     --enforce-eager \
     --disable-log-stats \
@@ -65,6 +50,22 @@ until curl -s http://127.0.0.1:8001/v1/models > /dev/null 2>&1; do
     sleep 2
 done
 echo "✅ vLLM is ready on port 8001!"
+
+# 5. Démarrage garanti d'Ollama (Embeddings) & Préchauffage
+echo "🚀 2/3 Starting Ollama for embeddings (Port 11434)..."
+ollama serve > ollama.log 2>&1 &
+
+echo "⏳ Waiting for Ollama engine to be ready..."
+until curl -s http://127.0.0.1:11434/api/tags > /dev/null 2>&1; do
+    sleep 1
+done
+echo "✅ Ollama is ready on port 11434!"
+
+# Téléchargement automatique garanti du modèle d'embedding (Plug & Play)
+echo "📦 Ensuring embedding model (qwen3-embedding:0.6b) is available..."
+ollama pull qwen3-embedding:0.6b
+echo "🔥 Pre-warming Qwen3-Embedding in memory..."
+curl -s http://127.0.0.1:11434/api/embed -d '{"model": "qwen3-embedding:0.6b", "input": "Segula Warmup", "keep_alive": -1}' > /dev/null 2>&1 || true
 
 # 6. Démarrage du Proxy Sécurisé (Port 8000)
 echo "🔒 3/3 Starting Secure Proxy Server on port 8000..."
