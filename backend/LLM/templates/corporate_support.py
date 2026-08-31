@@ -12,47 +12,25 @@ from backend.LLM.templates.template import build_system_prompt
 
 DEPARTMENT_CONTEXT = """## Department Context: Corporate & Support Services
 
-You are analyzing a request submitted under the **Corporate & Support Services** department at Segula Technologies (Casablanca Nearshore & Global Delivery Hubs).
+You are analyzing a request submitted under the **Corporate & Support Services** department at Segula Technologies.
 
-### The 11 In-Scope Core Functions:
+### The 10 In-Scope Core Functions:
 1. **Human Resources (HR):** Employee lifecycle, personnel records, staffing movements, HR business partnering, employee relations.
 2. **Recruitment & Talent Acquisition (TA):** Candidate sourcing, CV screening, job matching, internship pipelines, talent analytics.
 3. **Finance & Controlling:** Accounting, invoice processing, line-item reconciliation, expense tracking, cost control, budget forecasting.
 4. **Procurement / Achats:** Supplier management, vendor evaluation, purchase order processing, contract cost optimization.
-5. **IT Support & Infrastructure:** Internal helpdesk ticketing, network/systems management, IT asset tracking, internal developer tools & portals.
+5. **IT Internal Support & Infrastructure:** Internal employee IT helpdesk ticketing, employee laptop/account provisioning, office network management, and corporate admin portals.
+   *(Note: Engineering domain software, CAE/CAD tools, finite element solvers like ANSYS/Abaqus, and simulation compute clusters belong to Mechanical/Product Engineering, NOT corporate IT support).*
 6. **General Administration & Facilities:** Office management, workplace logistics, site administrative compliance.
 7. **Legal & Compliance:** Contract review, legal risk analysis, intellectual property, regulatory compliance, GDPR privacy.
-8. **Corporate Communication:** Internal communications, employer branding, CSR initiatives, change management.
-9. **Quality & Process Compliance (Transversal):** Internal ISO standards, audit support, process optimization, deliverable quality checks.
-10. **Training & Employee Onboarding:** Structured training programs, new hire onboarding paths, technical skills upskilling.
-11. **Document Engineering & Knowledge Management:** Technical documentation, user manuals, repair guides, internal knowledge base indexing & retrieval.
+8. **Quality & Process Compliance (Transversal):** Internal ISO standards, audit support, process optimization, deliverable quality checks.
+9. **Training & Employee Onboarding:** Structured training programs, new hire onboarding paths, technical skills upskilling.
+10. **Document Engineering & Knowledge Management:** Technical documentation, user manuals, repair guides, internal knowledge base indexing & retrieval.
 
 ### Department Scope Boundaries:
-- **RELEVANT**: The project directly serves one of the 11 functions above.
-- **PARTIALLY_RELEVANT**: The project is initiated by a Corporate Support team (e.g., HR, Finance, Procurement) but handles technical/engineering domain data (e.g., HR screening mechanical engineering CVs, Procurement processing automotive part invoices).
-- **UNRELATED**: The project is purely an operational engineering, manufacturing, automotive design, mechatronics, embedded systems, crash simulation, medical/pharma/healthcare, or other external domain that does not belong to Corporate & Support Services. Mark `department_relevance` as `UNRELATED`.
-
-### Common AI Opportunities in This Department
-- **Document intelligence:** Searching, summarizing, and answering questions from large internal document repositories (HR policies, IT wikis, legal contracts, invoices).
-- **Process automation:** Automating repetitive administrative tasks (ticket routing, form processing, reconciliation, data entry).
-- **Employee-facing assistants:** Chatbots and virtual assistants that help employees find information, complete onboarding, or troubleshoot IT issues.
-- **Recruitment & talent analytics:** CV screening, candidate matching, skills assessment, bias detection in hiring pipelines.
-- **Predictive analytics:** Employee attrition prediction, IT incident forecasting, budget anomaly detection.
-
-### Typical Data Sources
-- Internal documents (PDF, Word, SharePoint, Confluence)
-- HR information systems (HRIS), employee records
-- IT ticketing systems (Jira, ServiceNow)
-- Email and communication logs
-- Applicant Tracking Systems (ATS), CVs, job descriptions
-- ERP and accounting tables (SAP, invoices, purchase orders)
-
-### Department-Specific Risks to Watch For
-- **Data privacy / GDPR:** Employee personal data, candidate information, and HR records are highly sensitive. Any AI solution MUST consider data protection regulations.
-- **Bias and fairness:** Recruitment and HR analytics carry significant risk of algorithmic bias. Flag this for any project involving employee evaluation or candidate selection.
-- **User adoption:** Internal tools often face resistance from non-technical users. Consider whether the proposed solution accounts for user experience and change management.
-- **Integration with legacy systems:** Many corporate tools (SAP, legacy HRIS, old SharePoint) have limited API access. Flag integration complexity honestly.
-- **Multilingual requirements:** Segula operates internationally — solutions may need to handle French, English, and other languages."""
+- **IN-SCOPE**: The project directly serves one of the 10 internal corporate support functions above.
+- **OUT-OF-SCOPE (ENGINEERING)**: The project is an operational engineering application (e.g. CAD, FEA structural stress simulation, CFD, crash testing, vehicle chassis dynamics, embedded software, manufacturing lines). 
+  You MUST set `target_sub_function` to `OUT_OF_SCOPE_ENGINEERING`."""
 
 
 # ── Public API ───────────────────────────────────────────────────

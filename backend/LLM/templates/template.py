@@ -69,37 +69,37 @@ Classify each pillar brutally honest. the user can be wrong and dont understand 
   - `CRITICAL_RISK`: The described use case involves prohibited activity, unauthorized surveillance, sensitive profiling/inference of individuals, high-impact employment decisions based on personal data, serious privacy violations, illegal activity, or other substantial legal/ethical risk..
 - **reason**: 1-2 sentences governance and compliance assessment.
 
-### 6. Department Scope & Relevance (`department_relevance`)
-- **category** (RELEVANT | PARTIALLY_RELEVANT | UNRELATED):
-  - `RELEVANT`: The project clearly falls within one of the 11 Corporate & Support Services core functions:
-    1. Human Resources (HR / Personnel / Staffing)
-    2. Recruitment & Talent Acquisition (TA / CV Screening / Skill Matching)
-    3. Finance & Controlling (Accounting / Invoicing / Budget / Cost Management)
-    4. Procurement / Achats (Purchasing / Vendor Management / Supplier Orders)
-    5. IT Support & Infrastructure (Helpdesk / Network / Internal IT Tools)
-    6. General Administration & Facilities Management
-    7. Legal / Juridique (Contracts / IP / Compliance / GDPR)
-    8. Corporate Communication & Internal Relations
-    9. Quality & Process Compliance (Internal ISO standards / Audit Support)
-    10. Training, Upskilling & Employee Onboarding
-    11. Document Engineering & Internal Knowledge Management
-  - `PARTIALLY_RELEVANT`: The project is primarily for a Corporate Support team (e.g. HR, Finance, Procurement) but processes technical or engineering data (e.g. screening mechanical engineering CVs or extracting automotive part numbers from supplier purchase orders).
-  - `UNRELATED`: The project is clearly an operational engineering, manufacturing, automotive design, mechatronics, embedded systems, crash simulation, medical/pharma/healthcare, or other external domain that does not belong to Corporate & Support Services.
+### 6. Corporate Sub-Function Classification (`target_sub_function`)
+You must explicitly classify the project into exactly ONE of the following sub-functions based on who the business owner and end-user are:
+
+- `HR_PERSONNEL`: Employee lifecycle, personnel administration, HR records, staffing movements.
+- `RECRUITMENT_TALENT_ACQUISITION`: Candidate sourcing, CV screening, job/skill matching, hiring pipelines.
+- `FINANCE_CONTROLLING`: Accounting, invoice processing, line-item reconciliation, cost control, budget forecasting.
+- `PROCUREMENT_PURCHASING`: Vendor management, supplier orders, purchase order processing, supplier contract cost optimization.
+- `IT_INTERNAL_HELPDESK`: Internal corporate helpdesk ticketing, employee laptop/account provisioning, office network management, internal intranet/admin portals.
+  ⚠️ CRITICAL DISTINCTION: Engineering domain software, CAD/CAE tools, finite element solvers (ANSYS, Abaqus), and compute clusters used by mechanical engineers are NOT corporate IT helpdesk.
+- `LEGAL_COMPLIANCE`: Contract review, IP analysis, regulatory compliance, GDPR data privacy.
+- `GENERAL_ADMIN_FACILITIES`: Office management, workplace logistics, site compliance.
+- `QUALITY_INTERNAL_AUDIT`: Internal ISO standards compliance, audit support, deliverable quality checks.
+- `TRAINING_ONBOARDING`: Employee training paths, technical onboarding, skills upskilling.
+- `DOCUMENT_ENGINEERING`: Technical documentation, repair manuals, internal knowledge base indexing.
+- `OUT_OF_SCOPE_ENGINEERING`: ANY operational engineering project (Mechanical, Automotive, FEA/CFD stress simulations, CAD models, crash simulation, mechatronics, embedded systems, vehicle dynamics).
+- `OUT_OF_SCOPE_OTHER`: Any other domain outside Corporate & Support Services.
 
 ### Technical Approach & Summary
 - **identified_technique**: Specific recommended technical approach (e.g., "OCR + Fuzzy Matching", "RAG with Hybrid Vector Search", "Standard Python ETL Script (Rule-Based)" , "LLM + Agentic Workflow", etc).
 - **project_summary**: 2-3 sentences concise technical summary of the submission.
 
 ## Critical Rules
-1. **Architectural Reasoning**: Begin by writing your thorough step-by-step reasoning across each of the 5 pillars inside `<think>...</think>` tags before outputting the final structured JSON object.
+1. **Architectural Reasoning**: Begin by writing your thorough step-by-step reasoning across each of the 5 pillars and the corporate sub-function classification inside `<think>...</think>` tags before outputting the final structured JSON object.
 2. **Honesty over optimism**: If a project does not need AI, classify AI viability as `NOT_AI`, any project who have GDPR COMPLIANCE ISSUES AND VIOLATIONS is `CRITICAL_RISK` directly.
 3. **Strict Categorical Enums (Crucial)**: In the final JSON, you must strictly output only the allowed category strings:
+   - `target_sub_function`: "HR_PERSONNEL" | "RECRUITMENT_TALENT_ACQUISITION" | "FINANCE_CONTROLLING" | "PROCUREMENT_PURCHASING" | "IT_INTERNAL_HELPDESK" | "LEGAL_COMPLIANCE" | "GENERAL_ADMIN_FACILITIES" | "QUALITY_INTERNAL_AUDIT" | "TRAINING_ONBOARDING" | "DOCUMENT_ENGINEERING" | "OUT_OF_SCOPE_ENGINEERING" | "OUT_OF_SCOPE_OTHER"
    - `ai_viability`: "HIGHLY_VIABLE" | "MARGINAL" | "NOT_AI" | "IMPOSSIBLE"
    - `data_readiness`: "READY" | "UNLABELED_OR_MESSY" | "NONE"
    - `problem_clarity`: "CLEAR" | "PARTIAL" | "CONTRADICTORY" | "VAGUE"
    - `integration_feasibility`: "SIMPLE" | "MODERATE" | "COMPLEX" (Never use "NONE" or "VAGUE" here; if no integration needed, use "SIMPLE")
    - `governance_and_safety`: "SAFE" | "MODERATE_RISK" | "CRITICAL_RISK" (Never use "NONE" or "VAGUE" here; if no risks, use "SAFE")
-   - `department_relevance`: "RELEVANT" | "PARTIALLY_RELEVANT" | "UNRELATED"
 3. **Evidence-based**: Every category and reason must be supported by the user's input.
 4. **Completeness**: Fill all 5 pillars accurately."""
 

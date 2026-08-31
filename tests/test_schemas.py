@@ -302,3 +302,46 @@ def test_historic_project_ingest_schemas():
     assert response.status == "IMPLEMENTED"
     assert response.embedding_dimension == 768
 
+
+def test_corporate_sub_function_and_out_of_scope_veto():
+    """Test CorporateSubFunction mapping and automatic UNRELATED veto coupling."""
+    from backend.schemas import (
+        CategoricalFactExtraction,
+        PillarAIViability,
+        PillarDataReadiness,
+        PillarGovernance,
+        PillarIntegration,
+        PillarProblemClarity,
+    )
+
+    # 1. Valid in-scope HR project
+    hr_data = {
+        "project_summary": "Automated CV Screening for Talent Acquisition",
+        "identified_technique": "LLM + Fuzzy Matching",
+        "target_sub_function": "RECRUITMENT_TALENT_ACQUISITION",
+        "department_relevance": "RELEVANT",
+        "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "Standard NLP"},
+        "data_readiness": {"category": "READY", "reason": "5,000 CVs"},
+        "problem_clarity": {"category": "CLEAR", "reason": "Clear KPIs"},
+        "integration_feasibility": {"category": "SIMPLE", "reason": "REST API"},
+        "governance_and_safety": {"category": "SAFE", "reason": "Anonymized"},
+    }
+    ext_hr = CategoricalFactExtraction(**hr_data)
+    assert ext_hr.target_sub_function == "RECRUITMENT_TALENT_ACQUISITION"
+    assert ext_hr.department_relevance == "RELEVANT"
+
+    # 2. Out-of-scope Mechanical/FEA project (e.g. Vehicle Chassis Topology)
+    eng_data = {
+        "project_summary": "AI-Driven Vehicle Chassis Topology Optimization",
+        "identified_technique": "3D Graph Neural Network",
+        "target_sub_function": "OUT_OF_SCOPE_ENGINEERING",
+        "department_relevance": "RELEVANT", # Model mistakenly passed RELEVANT, validator must force UNRELATED
+        "ai_viability": {"category": "HIGHLY_VIABLE", "reason": "GNN surrogate"},
+        "data_readiness": {"category": "READY", "reason": "10,000 ANSYS simulations"},
+        "problem_clarity": {"category": "CLEAR", "reason": "Von Mises stress prediction"},
+        "integration_feasibility": {"category": "MODERATE", "reason": "ANSYS API"},
+        "governance_and_safety": {"category": "SAFE", "reason": "Internal CAD"},
+    }
+    ext_eng = CategoricalFactExtraction(**eng_data)
+    assert ext_eng.target_sub_function == "OUT_OF_SCOPE_ENGINEERING"
+    assert ext_eng.department_relevance == "UNRELATED"

@@ -109,13 +109,13 @@ def calculate_feasibility_score(
     veto_reasons: list[str] = []
 
     dept_relevance = facts.get("department_relevance", "RELEVANT")
+    target_sub = facts.get("target_sub_function")
 
     # 3. Circuit Breaker Veto Gates
-    if dept_relevance == "UNRELATED":
+    if dept_relevance == "UNRELATED" or target_sub in ("OUT_OF_SCOPE_ENGINEERING", "OUT_OF_SCOPE_OTHER"):
         total_score = min(total_score, 10)
         veto_reasons.append(
-            "Department Scope VETO: This request does not belong to Corporate & Support Services. "
-            "Please select the appropriate department for your request."
+            "Department Scope VETO: This request belongs to Operational/Mechanical Engineering and is out of scope for Corporate & Support Services."
         )
 
     if ai_cat in ["NOT_AI", "IMPOSSIBLE"]:

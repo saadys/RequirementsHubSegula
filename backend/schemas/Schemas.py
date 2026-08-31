@@ -4,7 +4,7 @@ Centralized definitions for request/response payloads, fact extractions, scoring
 """
 
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.config import MAX_CLARIFICATION_ROUNDS
 # pyrefly: ignore [missing-import]
@@ -79,11 +79,44 @@ class PillarGovernance(BaseModel):
     reason: str = Field(..., description="1-2 sentences governance and compliance assessment.")
 
 
+CorporateSubFunction = Literal[
+    "HR_PERSONNEL",
+    "RECRUITMENT_TALENT_ACQUISITION",
+    "FINANCE_CONTROLLING",
+    "PROCUREMENT_PURCHASING",
+    "IT_INTERNAL_HELPDESK",
+    "LEGAL_COMPLIANCE",
+    "GENERAL_ADMIN_FACILITIES",
+    "QUALITY_INTERNAL_AUDIT",
+    "TRAINING_ONBOARDING",
+    "DOCUMENT_ENGINEERING",
+    "OUT_OF_SCOPE_ENGINEERING",
+    "OUT_OF_SCOPE_OTHER",
+]
+
+
 class CategoricalFactExtraction(BaseModel):
     project_summary: str = Field(..., description="2-3 sentences concise technical summary of the submission.")
     identified_technique: str = Field(..., description="Recommended technical approach (e.g., 'OCR + Fuzzy Matching', 'RAG', 'Standard Python ETL Script') , 'LLM + Agentic Workflow', etc.")
+    target_sub_function: Optional[CorporateSubFunction] = Field(
+        default=None,
+        description=(
+            "HR_PERSONNEL: Human Resources, employee lifecycle, personnel administration.\n"
+            "RECRUITMENT_TALENT_ACQUISITION: Candidate screening, job matching, CV parsing.\n"
+            "FINANCE_CONTROLLING: Accounting, invoicing, expense tracking, cost control.\n"
+            "PROCUREMENT_PURCHASING: Vendor management, supplier orders, purchase order processing.\n"
+            "IT_INTERNAL_HELPDESK: Internal employee IT ticketing, hardware/software assets, internal corporate portals (NOT engineering simulation/CAD/CAE clusters).\n"
+            "LEGAL_COMPLIANCE: Contracts, regulatory compliance, GDPR data privacy.\n"
+            "GENERAL_ADMIN_FACILITIES: Office management, building logistics, site operations.\n"
+            "QUALITY_INTERNAL_AUDIT: Internal ISO standards compliance, audit support, deliverable quality checks.\n"
+            "TRAINING_ONBOARDING: Employee training, technical onboarding, skills upskilling.\n"
+            "DOCUMENT_ENGINEERING: Internal user manuals, technical documentation, knowledge base indexing.\n"
+            "OUT_OF_SCOPE_ENGINEERING: Operational engineering (Mechanical, FEA, CFD, CAD, crash simulation, automotive design, mechatronics, embedded systems).\n"
+            "OUT_OF_SCOPE_OTHER: Any other operational or external domain outside corporate support."
+        ),
+    )
     department_relevance: Literal["RELEVANT", "PARTIALLY_RELEVANT", "UNRELATED"] = Field(
-        ...,
+        default="RELEVANT",
         description=(
             "RELEVANT: The project clearly falls within one of the 11 Corporate & Support Services functions "
             "(HR, Recruitment, Finance, Procurement, IT, Admin, Legal, Communication, Quality, Training, Knowledge Management).\n"
@@ -97,6 +130,44 @@ class CategoricalFactExtraction(BaseModel):
     problem_clarity: PillarProblemClarity
     integration_feasibility: PillarIntegration
     governance_and_safety: PillarGovernance
+
+    @field_validator("target_sub_function", mode="before")
+    @classmethod
+    def normalize_target_sub_function(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        s = str(v).strip().upper()
+        if "ENGINEERING" in s or "MECHANICAL" in s or "AUTOMOTIVE" in s or "CAD" in s or "FEA" in s or "SIMULATION" in s:
+            return "OUT_OF_SCOPE_ENGINEERING"
+        if "RECRUIT" in s or "TALENT" in s or "CV" in s:
+            return "RECRUITMENT_TALENT_ACQUISITION"
+        if "HR" in s or "PERSONNEL" in s:
+            return "HR_PERSONNEL"
+        if "FINANCE" in s or "ACCOUNTING" in s or "INVOICE" in s:
+            return "FINANCE_CONTROLLING"
+        if "PROCURE" in s or "PURCHAS" in s or "ACHAT" in s or "SUPPLIER" in s:
+            return "PROCUREMENT_PURCHASING"
+        if "HELPDESK" in s or "IT_SUPPORT" in s or "TICKET" in s:
+            return "IT_INTERNAL_HELPDESK"
+        if "LEGAL" in s or "COMPLIANCE" in s or "GDPR" in s or "JURIDIQUE" in s:
+            return "LEGAL_COMPLIANCE"
+        if "ADMIN" in s or "FACILIT" in s:
+            return "GENERAL_ADMIN_FACILITIES"
+        if "QUALITY" in s or "AUDIT" in s or "ISO" in s:
+            return "QUALITY_INTERNAL_AUDIT"
+        if "TRAIN" in s or "ONBOARD" in s:
+            return "TRAINING_ONBOARDING"
+        if "DOCUMENT" in s or "KNOWLEDGE" in s:
+            return "DOCUMENT_ENGINEERING"
+        if "OUT_OF_SCOPE" in s or "OTHER" in s or "UNRELATED" in s:
+            return "OUT_OF_SCOPE_OTHER"
+        return s
+
+    @model_validator(mode="after")
+    def sync_department_relevance(self) -> "CategoricalFactExtraction":
+        if self.target_sub_function in ("OUT_OF_SCOPE_ENGINEERING", "OUT_OF_SCOPE_OTHER"):
+            self.department_relevance = "UNRELATED"
+        return self
 
 
 class QuestionItem(BaseModel):
