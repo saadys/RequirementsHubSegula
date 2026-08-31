@@ -70,21 +70,26 @@ Classify each pillar brutally honest. the user can be wrong and dont understand 
 - **reason**: 1-2 sentences governance and compliance assessment.
 
 ### 6. Corporate Sub-Function Classification (`target_sub_function`)
-You must explicitly classify the project into exactly ONE of the following sub-functions based on who the business owner and end-user are:
+### 🚨 UNIVERSAL DEPARTMENT SCOPE RULE (PRIMARY END-USER CRITERION)
+A project belongs to Corporate & Support Services ONLY IF the direct daily users of the AI tool are the internal administrative/support staff of Segula Technologies (e.g. in-house HR specialists, in-house accountants, corporate buyers, internal IT support agents, in-house legal counsel).
 
-- `HR_PERSONNEL`: Employee lifecycle, personnel administration, HR records, staffing movements.
+If the primary end-user is an operational professional, scientific researcher, field specialist, product designer, or external practitioner outside internal corporate management, the project is STRICTLY OUT-OF-SCOPE (`OUT_OF_SCOPE_OTHER` or `OUT_OF_SCOPE_ENGINEERING`), regardless of how viable or promising the AI technology is.
+
+You must explicitly classify the project into exactly ONE of the following sub-functions:
+- `HR_PERSONNEL`: In-house employee lifecycle, personnel administration, HR records, staffing movements.
 - `RECRUITMENT_TALENT_ACQUISITION`: Candidate sourcing, CV screening, job/skill matching, hiring pipelines.
-- `FINANCE_CONTROLLING`: Accounting, invoice processing, line-item reconciliation, cost control, budget forecasting.
-- `PROCUREMENT_PURCHASING`: Vendor management, supplier orders, purchase order processing, supplier contract cost optimization.
-- `IT_INTERNAL_HELPDESK`: Internal corporate helpdesk ticketing, employee laptop/account provisioning, office network management, internal intranet/admin portals.
-  ⚠️ CRITICAL DISTINCTION: Engineering domain software, CAD/CAE tools, finite element solvers (ANSYS, Abaqus), and compute clusters used by mechanical engineers are NOT corporate IT helpdesk.
-- `LEGAL_COMPLIANCE`: Contract review, IP analysis, regulatory compliance, GDPR data privacy.
+- `FINANCE_CONTROLLING`: In-house accounting, invoice processing, line-item reconciliation, cost control, budget forecasting.
+- `PROCUREMENT_PURCHASING`: Vendor management, supplier purchase orders, contract cost optimization.
+- `IT_INTERNAL_HELPDESK`: Tools used exclusively by internal corporate IT administrators for employee helpdesk ticketing, laptop/account provisioning, office network access, and internal corporate intranet portals.
+  ⚠️ CRITICAL DISTINCTION: The fact that a software application runs on a server, uses computing power, or processes digital files does NOT make it an "IT Support" project. If the core capability serves a domain outside internal corporate IT management, it is OUT-OF-SCOPE.
+- `LEGAL_COMPLIANCE`: Tools used exclusively by in-house corporate legal counsel to draft, review, and negotiate business contracts, vendor NDAs, corporate governance policies, and legal disputes.
+  ⚠️ CRITICAL DISTINCTION: Merely having to comply with privacy laws (GDPR), ethical standards, safety norms, or industry regulations does NOT make a project a "Legal & Compliance" tool. Every AI system in the world must comply with laws. A project belongs to `LEGAL_COMPLIANCE` ONLY if corporate lawyers are the primary users interacting with legal documents.
 - `GENERAL_ADMIN_FACILITIES`: Office management, workplace logistics, site compliance.
-- `QUALITY_INTERNAL_AUDIT`: Internal ISO standards compliance, audit support, deliverable quality checks.
-- `TRAINING_ONBOARDING`: Employee training paths, technical onboarding, skills upskilling.
+- `QUALITY_INTERNAL_AUDIT`: Internal ISO standards compliance, corporate audit support, deliverable quality checks.
+- `TRAINING_ONBOARDING`: Employee training paths, technical onboarding, internal skills upskilling.
 - `DOCUMENT_ENGINEERING`: Technical documentation, repair manuals, internal knowledge base indexing.
-- `OUT_OF_SCOPE_ENGINEERING`: ANY operational engineering project (Mechanical, Automotive, FEA/CFD stress simulations, CAD models, crash simulation, mechatronics, embedded systems, vehicle dynamics).
-- `OUT_OF_SCOPE_OTHER`: Any other domain outside Corporate & Support Services.
+- `OUT_OF_SCOPE_ENGINEERING`: Any project whose primary purpose is product engineering, physical simulation, CAD design, vehicle/machine operations, or industrial production.
+- `OUT_OF_SCOPE_OTHER`: Any project whose primary purpose serves an operational, scientific, medical, clinical, or external business domain outside internal corporate administration.
 
 ### Technical Approach & Summary
 - **identified_technique**: Specific recommended technical approach (e.g., "OCR + Fuzzy Matching", "RAG with Hybrid Vector Search", "Standard Python ETL Script (Rule-Based)" , "LLM + Agentic Workflow", etc).
