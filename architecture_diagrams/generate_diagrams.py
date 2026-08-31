@@ -1,169 +1,332 @@
 """
-Segula AI Requirement Hub - Architecture Diagram Generator
-Uses the Python 'diagrams' library to generate high-resolution architecture diagrams
-with a clean, professional white background suitable for executive presentations.
+Segula AI Requirement Hub - Enterprise Architecture Diagram Generator
+Uses native Python 'graphviz' with HTML record cards for crisp, publication-quality diagrams.
 
 Run with:
     uv run python architecture_diagrams/generate_diagrams.py
 """
 
 import os
-from diagrams import Diagram, Cluster, Edge
-from diagrams.custom import Custom
-from diagrams.onprem.client import Users
-from diagrams.onprem.database import PostgreSQL
+import graphviz
 
-# Change to the script's directory
+# Change to the script directory
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
 # ==============================================================================
-# Global Styling Theme (Enterprise Light / White Background)
-# ==============================================================================
-graph_attr_global = {
-    "fontsize": "26",
-    "fontname": "Arial, Helvetica, sans-serif",
-    "bgcolor": "#ffffff",
-    "fontcolor": "#0f172a",
-    "pad": "0.8",
-    "splines": "curved",
-    "nodesep": "1.0",
-    "ranksep": "1.8",
-    "compound": "true",
-    "concentrate": "false"
-}
-
-node_attr_global = {
-    "fontname": "Arial, Helvetica, sans-serif",
-    "fontsize": "12",
-    "fontcolor": "#0f172a",
-    "color": "#cbd5e1",
-    "style": "filled",
-    "fillcolor": "#f8fafc",
-    "shape": "box"
-}
-
-edge_attr_global = {
-    "fontname": "Arial, Helvetica, sans-serif",
-    "fontsize": "10",
-    "fontcolor": "#334155",
-    "color": "#2563eb",
-    "penwidth": "1.6"
-}
-
-# ==============================================================================
 # Diagram 1: End-to-End Enterprise Sovereign Architecture
 # ==============================================================================
-print("🎨 Generating Diagram 1: End-to-End Enterprise Architecture (White Background)...")
+print("🎨 Generating Diagram 1: End-to-End Enterprise Architecture...")
 
-with Diagram(
-    "Segula AI Requirement Hub - End-to-End Sovereign Enterprise Architecture",
-    filename="segula_ai_hub_architecture",
-    show=False,
-    direction="LR",
-    graph_attr=graph_attr_global,
-    node_attr=node_attr_global,
-    edge_attr=edge_attr_global
-):
-    users = Users("Segula Engineers\n& Department Leads\n(Web Portal)")
+dot = graphviz.Digraph(
+    "Segula_AI_Architecture",
+    format="png",
+    graph_attr={
+        "rankdir": "LR",
+        "fontsize": "24",
+        "fontname": "Helvetica Neue, Arial, sans-serif",
+        "bgcolor": "#FFFFFF",
+        "pad": "0.6",
+        "nodesep": "0.7",
+        "ranksep": "1.1",
+        "splines": "spline",
+        "dpi": "220"
+    },
+    node_attr={
+        "fontname": "Helvetica Neue, Arial, sans-serif",
+        "fontsize": "11",
+        "shape": "box",
+        "style": "rounded,filled",
+        "fillcolor": "#FFFFFF",
+        "color": "#CBD5E1",
+        "penwidth": "1.2",
+        "margin": "0.18,0.12"
+    },
+    edge_attr={
+        "fontname": "Helvetica Neue, Arial, sans-serif",
+        "fontsize": "9",
+        "color": "#475569",
+        "penwidth": "1.3",
+        "arrowsize": "0.8"
+    }
+)
 
-    # 1. CI/CD Cluster
-    with Cluster("Automated CI/CD Platform (GitHub Actions)", graph_attr={"bgcolor": "#f1f5f9", "fontcolor": "#6b21a8", "fontsize": "14", "pencolor": "#c084fc", "penwidth": "1.5"}):
-        ci_cd = Custom("GitHub Actions\nCI/CD Runner", "assets/github_actions.png")
+# ── 1. Client Tier ──
+with dot.subgraph(name="cluster_client") as c:
+    c.attr(label="Client & User Tier", fontname="Helvetica Neue, Arial, sans-serif", fontsize="14", fontcolor="#1E293B", style="rounded,filled", fillcolor="#F8FAFC", color="#CBD5E1", penwidth="1.5")
+    c.node(
+        "user_ui",
+        label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+        <TR><TD><B><FONT COLOR="#0F172A" POINT-SIZE="13">Segula Engineering Portal</FONT></B></TD></TR>
+        <TR><TD><FONT COLOR="#64748B" POINT-SIZE="10">React 18 SPA + Vite + Tailwind CSS</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#2563EB" POINT-SIZE="9">- Real-Time SSE Stream Consumer</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#2563EB" POINT-SIZE="9">- AI Admin Audit Dashboard</FONT></TD></TR>
+        </TABLE>>''',
+        fillcolor="#FFFFFF",
+        color="#3B82F6",
+        penwidth="1.8"
+    )
 
-    # 2. Google Cloud Run Cluster
-    with Cluster("Production Runtime Tier (Google Cloud Run Serverless)", graph_attr={"bgcolor": "#f8fafc", "fontcolor": "#1e40af", "fontsize": "15", "pencolor": "#93c5fd", "penwidth": "1.5"}):
-        ui = Custom("React 18 SPA\nVite Frontend", "assets/react.png")
-        fastapi = Custom("FastAPI Core\nSSE Streaming Gateway", "assets/fastapi.png")
-        
-        with Cluster("LangGraph AI State Machine Pipeline", graph_attr={"bgcolor": "#ffffff", "fontcolor": "#b45309", "fontsize": "13", "pencolor": "#fcd34d", "penwidth": "1.5"}):
-            validation_node = Custom("1. Ingestion &\nSchema Rules", "assets/segula.png")
-            rag_node = PostgreSQL("2. Vector RAG\nSearch Node")
-            fact_node = Custom("3. 5-Pillars Fact\nDeepSeek Reasoner", "assets/deepseek.png")
-            scoring_node = Custom("4. Scoring Engine\nRubrics & Veto", "assets/segula.png")
-            report_node = Custom("5. Dossier Builder\nStrategic AI Advice", "assets/segula.png")
+# ── 2. CI/CD Tier ──
+with dot.subgraph(name="cluster_cicd") as c:
+    c.attr(label="Automated CI/CD Platform", fontname="Helvetica Neue, Arial, sans-serif", fontsize="14", fontcolor="#6B21A8", style="rounded,filled", fillcolor="#FAF5FF", color="#E9D5FF", penwidth="1.5")
+    c.node(
+        "github_actions",
+        label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+        <TR><TD><B><FONT COLOR="#581C87" POINT-SIZE="13">GitHub Actions Runner</FONT></B></TD></TR>
+        <TR><TD><FONT COLOR="#6B21A8" POINT-SIZE="10">- 37 Pytest Unit Tests</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#6B21A8" POINT-SIZE="10">- Alembic Schema Migrations</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#6B21A8" POINT-SIZE="10">- Docker Build &amp; Deploy to Cloud Run</FONT></TD></TR>
+        </TABLE>>''',
+        fillcolor="#FFFFFF",
+        color="#A855F7",
+        penwidth="1.5"
+    )
 
-            validation_node >> Edge(color="#64748b", style="solid") >> rag_node >> Edge(color="#64748b", style="solid") >> fact_node >> Edge(color="#64748b", style="solid") >> scoring_node >> Edge(color="#64748b", style="solid") >> report_node
-
-        ui >> Edge(color="#2563eb", label="POST /api/submissions/stream\n(SSE Real-Time)") >> fastapi
-        fastapi >> Edge(color="#2563eb", label="Trigger LangGraph") >> validation_node
-
-    # 3. Supabase Database Cluster
-    with Cluster("Managed Database Tier (Supabase PostgreSQL 17 + pgvector)", graph_attr={"bgcolor": "#f8fafc", "fontcolor": "#15803d", "fontsize": "15", "pencolor": "#86efac", "penwidth": "1.5"}):
-        supabase_db = Custom("Supabase PgBouncer Pooler\n(Port 5432 / Session Mode)", "assets/supabase.png")
-        pgvector_store = PostgreSQL("Historic Projects Index\npgvector Cosine (1024-dim)")
-        submissions_table = PostgreSQL("Submissions, Facts,\nScoring & Dossiers")
-        
-        supabase_db >> Edge(color="#16a34a") >> pgvector_store
-        supabase_db >> Edge(color="#16a34a") >> submissions_table
-
-    # 4. Lightning AI Sovereign GPU Cluster
-    with Cluster("Sovereign AI GPU Platform (Lightning AI Studio - Tesla T4 16GB)", graph_attr={"bgcolor": "#f8fafc", "fontcolor": "#c2410c", "fontsize": "15", "pencolor": "#fdba74", "penwidth": "1.5"}):
-        proxy = Custom("FastAPI Secure Gateway\nBearer Token Auth (Port 8000)", "assets/lightning.png")
-        
-        vllm = Custom("vLLM Inception Engine\nDeepSeek-R1 14B AWQ\n(Port 8001 | Marlin FP16)", "assets/deepseek.png")
-        ollama = Custom("Ollama Embed Engine\nQwen3-Embedding 0.6B\n(Port 11434 | 4x Parallel)", "assets/ollama.png")
-
-        proxy >> Edge(color="#ea580c", label="/v1/chat/completions") >> vllm
-        proxy >> Edge(color="#ea580c", label="/api/embed") >> ollama
-
-    # Global System Connections
-    users >> Edge(color="#2563eb", label="HTTPS / Web Traffic") >> ui
-    ci_cd >> Edge(color="#7c3aed", label="Builds & Deploys Container") >> fastapi
+# ── 3. Google Cloud Run Runtime Tier ──
+with dot.subgraph(name="cluster_cloudrun") as c:
+    c.attr(label="Production Runtime Platform (Google Cloud Run Serverless)", fontname="Helvetica Neue, Arial, sans-serif", fontsize="14", fontcolor="#1E40AF", style="rounded,filled", fillcolor="#F0FDF4", color="#BBF7D0", penwidth="1.5")
     
-    rag_node >> Edge(color="#16a34a", label="Cosine Similarity (<=>)") >> supabase_db
-    report_node >> Edge(color="#16a34a", label="Persist Results & State") >> supabase_db
-    
-    rag_node >> Edge(color="#ea580c", style="dashed", label="Embed Query (/api/embed)") >> proxy
-    fact_node >> Edge(color="#ea580c", style="bold", label="Stream Reasoning Tokens (/v1/...)") >> proxy
-    report_node >> Edge(color="#ea580c", label="Generate Strategic Advice") >> proxy
+    c.node(
+        "fastapi_app",
+        label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+        <TR><TD><B><FONT COLOR="#0F172A" POINT-SIZE="13">FastAPI Application Core</FONT></B></TD></TR>
+        <TR><TD><FONT COLOR="#64748B" POINT-SIZE="10">Uvicorn Async ASGI Server (Port 8080)</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#059669" POINT-SIZE="9">- Server-Sent Events (SSE) Gateway</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#059669" POINT-SIZE="9">- Async Connection Pool Manager</FONT></TD></TR>
+        </TABLE>>''',
+        fillcolor="#FFFFFF",
+        color="#10B981",
+        penwidth="1.8"
+    )
 
-print("✅ Diagram 1 generated: architecture_diagrams/segula_ai_hub_architecture.png")
+    with c.subgraph(name="cluster_langgraph") as lg:
+        lg.attr(label="LangGraph AI State Machine Engine", fontname="Helvetica Neue, Arial, sans-serif", fontsize="12", fontcolor="#B45309", style="rounded,dashed", fillcolor="#FFFBEB", color="#FCD34D", penwidth="1.2")
+        lg.node("n1", label="1. Ingestion &\nSchema Rules", color="#F59E0B", fillcolor="#FFFFFF")
+        lg.node("n2", label="2. Vector RAG\nSearch Node", color="#F59E0B", fillcolor="#FFFFFF")
+        lg.node("n3", label="3. 5-Pillar Extraction\n(DeepSeek Reasoner)", color="#F59E0B", fillcolor="#FFFFFF")
+        lg.node("n4", label="4. Scoring Engine\n(Rubrics & Veto)", color="#F59E0B", fillcolor="#FFFFFF")
+        lg.node("n5", label="5. Dossier Builder\n(AI Advice)", color="#F59E0B", fillcolor="#FFFFFF")
+
+# ── 4. Supabase Database Tier ──
+with dot.subgraph(name="cluster_supabase") as c:
+    c.attr(label="Managed Database Tier (Supabase PostgreSQL 17)", fontname="Helvetica Neue, Arial, sans-serif", fontsize="14", fontcolor="#15803D", style="rounded,filled", fillcolor="#F0FDF4", color="#86EFAC", penwidth="1.5")
+    c.node(
+        "pg_pooler",
+        label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+        <TR><TD><B><FONT COLOR="#14532D" POINT-SIZE="13">PgBouncer Pooler</FONT></B></TD></TR>
+        <TR><TD><FONT COLOR="#16A34A" POINT-SIZE="10">Port 5432 (Session Mode)</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#64748B" POINT-SIZE="9">Statement Cache Disabled</FONT></TD></TR>
+        </TABLE>>''',
+        fillcolor="#FFFFFF",
+        color="#22C55E",
+        penwidth="1.5"
+    )
+    c.node(
+        "pg_vector",
+        label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+        <TR><TD><B><FONT COLOR="#14532D" POINT-SIZE="13">pgvector Store</FONT></B></TD></TR>
+        <TR><TD><FONT COLOR="#16A34A" POINT-SIZE="10">Historic Segula Index</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#64748B" POINT-SIZE="9">1024-dim Cosine (&lt;=&gt;)</FONT></TD></TR>
+        </TABLE>>''',
+        fillcolor="#FFFFFF",
+        color="#22C55E",
+        penwidth="1.5"
+    )
+    c.node(
+        "pg_tables",
+        label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+        <TR><TD><B><FONT COLOR="#14532D" POINT-SIZE="13">Relational Audit Tables</FONT></B></TD></TR>
+        <TR><TD><FONT COLOR="#16A34A" POINT-SIZE="10">- Submissions &amp; Facts</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#16A34A" POINT-SIZE="10">- Scores &amp; Dossiers</FONT></TD></TR>
+        </TABLE>>''',
+        fillcolor="#FFFFFF",
+        color="#22C55E",
+        penwidth="1.5"
+    )
+
+# ── 5. Sovereign GPU Compute Tier ──
+with dot.subgraph(name="cluster_gpu") as c:
+    c.attr(label="Sovereign AI Compute Tier (Lightning AI Studio - Tesla T4 16GB)", fontname="Helvetica Neue, Arial, sans-serif", fontsize="14", fontcolor="#C2410C", style="rounded,filled", fillcolor="#FFF7ED", color="#FDBA74", penwidth="1.5")
+    c.node(
+        "gpu_proxy",
+        label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+        <TR><TD><B><FONT COLOR="#9A3412" POINT-SIZE="13">Secure Gateway Proxy</FONT></B></TD></TR>
+        <TR><TD><FONT COLOR="#C2410C" POINT-SIZE="10">FastAPI Port 8000</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#EA580C" POINT-SIZE="9">Bearer Token Auth &amp; Routing</FONT></TD></TR>
+        </TABLE>>''',
+        fillcolor="#FFFFFF",
+        color="#F97316",
+        penwidth="1.8"
+    )
+    c.node(
+        "vllm_engine",
+        label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+        <TR><TD><B><FONT COLOR="#9A3412" POINT-SIZE="13">vLLM Inference Engine</FONT></B></TD></TR>
+        <TR><TD><FONT COLOR="#C2410C" POINT-SIZE="10">Port 8001 | AWQ Marlin FP16</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#EA580C" POINT-SIZE="9"><B>DeepSeek-R1-Distill-Qwen-14B</B></FONT></TD></TR>
+        <TR><TD><FONT COLOR="#64748B" POINT-SIZE="9">High-Speed Token Streaming</FONT></TD></TR>
+        </TABLE>>''',
+        fillcolor="#FFFFFF",
+        color="#EA580C",
+        penwidth="1.5"
+    )
+    c.node(
+        "ollama_engine",
+        label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+        <TR><TD><B><FONT COLOR="#9A3412" POINT-SIZE="13">Ollama Embedding Engine</FONT></B></TD></TR>
+        <TR><TD><FONT COLOR="#C2410C" POINT-SIZE="10">Port 11434 | 4x Parallel Workers</FONT></TD></TR>
+        <TR><TD><FONT COLOR="#EA580C" POINT-SIZE="9"><B>Qwen3-Embedding:0.6b</B></FONT></TD></TR>
+        <TR><TD><FONT COLOR="#64748B" POINT-SIZE="9">Permanent VRAM Keep-Alive</FONT></TD></TR>
+        </TABLE>>''',
+        fillcolor="#FFFFFF",
+        color="#EA580C",
+        penwidth="1.5"
+    )
+
+# ── Logical Connections ──
+dot.edge("user_ui", "fastapi_app", label=" HTTPS / SSE Stream", color="#2563EB", fontcolor="#1E40AF")
+dot.edge("github_actions", "fastapi_app", label=" Automated Deploy", color="#7C3AED", fontcolor="#6B21A8", style="dashed")
+
+dot.edge("fastapi_app", "n1", label=" Trigger", color="#059669")
+dot.edge("n1", "n2", color="#D97706")
+dot.edge("n2", "n3", color="#D97706")
+dot.edge("n3", "n4", color="#D97706")
+dot.edge("n4", "n5", color="#D97706")
+
+dot.edge("n2", "pg_pooler", label=" Search Similars", color="#16A34A", fontcolor="#15803D")
+dot.edge("pg_pooler", "pg_vector", color="#16A34A")
+dot.edge("n5", "pg_pooler", label=" Save Dossier", color="#16A34A", fontcolor="#15803D")
+dot.edge("pg_pooler", "pg_tables", color="#16A34A")
+
+dot.edge("n2", "gpu_proxy", label=" /api/embed", color="#EA580C", fontcolor="#C2410C", style="dashed")
+dot.edge("n3", "gpu_proxy", label=" /v1/... (Stream)", color="#EA580C", fontcolor="#C2410C")
+dot.edge("n5", "gpu_proxy", label=" Advice", color="#EA580C", fontcolor="#C2410C")
+
+dot.edge("gpu_proxy", "vllm_engine", color="#EA580C")
+dot.edge("gpu_proxy", "ollama_engine", color="#EA580C")
+
+dot.render("segula_ai_hub_architecture", cleanup=True)
+print("✅ Diagram 1 generated: segula_ai_hub_architecture.png")
 
 
 # ==============================================================================
-# Diagram 2: LangGraph 5-Pillar Decision & Scoring Flow
+# Diagram 2: LangGraph 5-Pillar Decision Pipeline Flow
 # ==============================================================================
-print("🎨 Generating Diagram 2: LangGraph 5-Pillar Pipeline Flow (White Background)...")
+print("🎨 Generating Diagram 2: LangGraph 5-Pillar Pipeline Flow...")
 
-with Diagram(
-    "Segula AI Requirement Hub - 5-Pillar LangGraph Decision & Assessment Flow",
-    filename="segula_ai_pipeline_flow",
-    show=False,
-    direction="TB",
-    graph_attr={"fontsize": "24", "bgcolor": "#ffffff", "fontcolor": "#0f172a", "pad": "0.8", "ranksep": "1.4", "splines": "curved"},
-    node_attr=node_attr_global,
-    edge_attr=edge_attr_global
-):
-    start = Users("Form Submission\n(8 Required Fields + Attachments)")
+flow = graphviz.Digraph(
+    "Segula_AI_Pipeline_Flow",
+    format="png",
+    graph_attr={
+        "rankdir": "TB",
+        "fontsize": "22",
+        "fontname": "Helvetica Neue, Arial, sans-serif",
+        "bgcolor": "#FFFFFF",
+        "pad": "0.5",
+        "nodesep": "0.5",
+        "ranksep": "0.6",
+        "dpi": "220"
+    },
+    node_attr={
+        "fontname": "Helvetica Neue, Arial, sans-serif",
+        "fontsize": "11",
+        "shape": "box",
+        "style": "rounded,filled",
+        "fillcolor": "#FFFFFF",
+        "color": "#CBD5E1",
+        "penwidth": "1.2",
+        "margin": "0.22,0.14"
+    },
+    edge_attr={
+        "fontname": "Helvetica Neue, Arial, sans-serif",
+        "fontsize": "10",
+        "color": "#2563EB",
+        "penwidth": "1.5",
+        "arrowsize": "0.8"
+    }
+)
 
-    with Cluster("1. Ingestion & Schema Gate", graph_attr={"bgcolor": "#f8fafc", "fontcolor": "#1e40af", "pencolor": "#93c5fd", "penwidth": "1.5"}):
-        step1 = Custom("Field Ingestion\n& Department Schema Rules", "assets/segula.png")
+flow.node(
+    "start",
+    label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+    <TR><TD><B><FONT COLOR="#0F172A" POINT-SIZE="13">Project Requirement Submission</FONT></B></TD></TR>
+    <TR><TD><FONT COLOR="#64748B" POINT-SIZE="10">8 Mandatory Form Fields + Optional Technical Attachments</FONT></TD></TR>
+    </TABLE>>''',
+    fillcolor="#EFF6FF",
+    color="#3B82F6",
+    penwidth="1.8"
+)
 
-    with Cluster("2. Semantic Knowledge Base Search", graph_attr={"bgcolor": "#f8fafc", "fontcolor": "#15803d", "pencolor": "#86efac", "penwidth": "1.5"}):
-        step2_embed = Custom("Qwen3-Embedding:0.6b\n(1024-dim Vector Generation)", "assets/ollama.png")
-        step2_pgvector = PostgreSQL("pgvector Cosine Search (<=>)\nHistoric Segula Projects Index")
-        step2_embed >> Edge(color="#16a34a") >> step2_pgvector
+flow.node(
+    "step1",
+    label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+    <TR><TD><B><FONT COLOR="#0F172A" POINT-SIZE="12">1. Ingestion &amp; Department Rules Gate</FONT></B></TD></TR>
+    <TR><TD><FONT COLOR="#64748B" POINT-SIZE="10">Validates required fields &amp; department schema constraints</FONT></TD></TR>
+    </TABLE>>''',
+    fillcolor="#F8FAFC"
+)
 
-    with Cluster("3. 5-Pillar Fact Extraction & Deep Reasoning", graph_attr={"bgcolor": "#f8fafc", "fontcolor": "#c2410c", "pencolor": "#fdba74", "penwidth": "1.5"}):
-        step3_reasoning = Custom("DeepSeek-R1 14B AWQ\nStreaming `<think>` Reasoning", "assets/deepseek.png")
-        step3_pillars = Custom("5-Pillar Classification\nViability | Data | Clarity | Integration | Governance", "assets/segula.png")
-        step3_reasoning >> Edge(color="#ea580c") >> step3_pillars
+flow.node(
+    "step2",
+    label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+    <TR><TD><B><FONT COLOR="#0F172A" POINT-SIZE="12">2. Semantic Knowledge Base Search (Vector RAG)</FONT></B></TD></TR>
+    <TR><TD><FONT COLOR="#059669" POINT-SIZE="10">- Qwen3-Embedding:0.6b (1024-dim dense vector generation)</FONT></TD></TR>
+    <TR><TD><FONT COLOR="#059669" POINT-SIZE="10">- pgvector Cosine Distance Search across Historic Segula Projects</FONT></TD></TR>
+    <TR><TD><FONT COLOR="#059669" POINT-SIZE="10">- Returns Top Similar Projects &amp; Historical Similarity Score %</FONT></TD></TR>
+    </TABLE>>''',
+    fillcolor="#F0FDF4",
+    color="#86EFAC",
+    penwidth="1.5"
+)
 
-    with Cluster("4. Deterministic Scoring & Veto Engine", graph_attr={"bgcolor": "#f8fafc", "fontcolor": "#b45309", "pencolor": "#fcd34d", "penwidth": "1.5"}):
-        step4_rubrics = Custom("Weighted Scoring Algorithm\n(0 - 100 Scale)", "assets/segula.png")
-        step4_veto = Custom("VETO Kill-Switches\n(IMPOSSIBLE | NOT_AI | CRITICAL_RISK | NO_DATA)", "assets/segula.png")
-        step4_rubrics >> Edge(color="#d97706") >> step4_veto
+flow.node(
+    "step3",
+    label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+    <TR><TD><B><FONT COLOR="#0F172A" POINT-SIZE="12">3. 5-Pillar Fact Extraction &amp; Deep Reasoning</FONT></B></TD></TR>
+    <TR><TD><FONT COLOR="#EA580C" POINT-SIZE="10"><B>DeepSeek-R1-Distill-Qwen-14B-AWQ (vLLM)</B></FONT></TD></TR>
+    <TR><TD><FONT COLOR="#475569" POINT-SIZE="10">- Real-Time Streaming &lt;think&gt; Architectural Reasoning</FONT></TD></TR>
+    <TR><TD><FONT COLOR="#475569" POINT-SIZE="10">- AI Viability | Data Readiness | Problem Scope &amp; Clarity</FONT></TD></TR>
+    <TR><TD><FONT COLOR="#475569" POINT-SIZE="10">- Integration Feasibility | Governance &amp; Compliance Risk</FONT></TD></TR>
+    </TABLE>>''',
+    fillcolor="#FFF7ED",
+    color="#FDBA74",
+    penwidth="1.5"
+)
 
-    with Cluster("5. Feasibility Dossier & Governance Output", graph_attr={"bgcolor": "#f8fafc", "fontcolor": "#15803d", "pencolor": "#86efac", "penwidth": "1.5"}):
-        decision = Custom("Decision Gate\nFAST_TRACK (>=85%) | GO (>=70%) | CLARIFY (>=50%) | NO_GO (<50%)", "assets/segula.png")
-        report = Custom("Feasibility Report Dossier\nTarget Architecture, Tech Stack & Action Plan", "assets/segula.png")
-        decision >> Edge(color="#16a34a") >> report
+flow.node(
+    "step4",
+    label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+    <TR><TD><B><FONT COLOR="#0F172A" POINT-SIZE="12">4. Deterministic Scoring &amp; VETO Gate</FONT></B></TD></TR>
+    <TR><TD><FONT COLOR="#D97706" POINT-SIZE="10">- Weighted 5-Pillar Rubric Calculation (0 - 100 Score)</FONT></TD></TR>
+    <TR><TD><FONT COLOR="#DC2626" POINT-SIZE="10">- VETO Kill-Switches: IMPOSSIBLE, NOT_AI, CRITICAL_RISK, NO_DATA</FONT></TD></TR>
+    </TABLE>>''',
+    fillcolor="#FEF3C7",
+    color="#FCD34D",
+    penwidth="1.5"
+)
 
-    start >> Edge(color="#2563eb") >> step1 >> Edge(color="#2563eb") >> step2_embed
-    step2_pgvector >> Edge(color="#2563eb") >> step3_reasoning
-    step3_pillars >> Edge(color="#2563eb") >> step4_rubrics
-    step4_veto >> Edge(color="#2563eb") >> decision
+flow.node(
+    "step5",
+    label='''<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="2">
+    <TR><TD><B><FONT COLOR="#0F172A" POINT-SIZE="12">5. Decision Gate &amp; Feasibility Dossier</FONT></B></TD></TR>
+    <TR><TD><FONT COLOR="#15803D" POINT-SIZE="10"><B>FAST_TRACK</B> (Exact Match / Score &gt;= 85%)</FONT></TD></TR>
+    <TR><TD><FONT COLOR="#059669" POINT-SIZE="10"><B>GO</B> (High Viability / Score &gt;= 70%)</FONT></TD></TR>
+    <TR><TD><FONT COLOR="#D97706" POINT-SIZE="10"><B>CLARIFY</B> (Partial Info / Score 50-69%)</FONT></TD></TR>
+    <TR><TD><FONT COLOR="#DC2626" POINT-SIZE="10"><B>NO_GO</B> (Veto Triggered / Score &lt; 50%)</FONT></TD></TR>
+    <TR><TD><FONT COLOR="#64748B" POINT-SIZE="10">- Generates Tailored Architecture, Tech Stack &amp; Next Action Plan</FONT></TD></TR>
+    </TABLE>>''',
+    fillcolor="#F0FDF4",
+    color="#86EFAC",
+    penwidth="1.8"
+)
 
-print("✅ Diagram 2 generated: architecture_diagrams/segula_ai_pipeline_flow.png")
-print("🎉 All white-background diagrams generated successfully!")
+flow.edge("start", "step1")
+flow.edge("step1", "step2")
+flow.edge("step2", "step3")
+flow.edge("step3", "step4")
+flow.edge("step4", "step5")
+
+flow.render("segula_ai_pipeline_flow", cleanup=True)
+print("✅ Diagram 2 generated: segula_ai_pipeline_flow.png")
+print("🎉 Clean professional vector diagrams generated successfully!")
