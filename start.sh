@@ -10,6 +10,10 @@ export PATH="/usr/local/bin:$PATH"
 export HF_HOME="/teamspace/studios/this_studio/hf_cache"
 export OLLAMA_MODELS="/teamspace/studios/this_studio/ollama_models"
 export OLLAMA_HOST="127.0.0.1:11434"
+export OLLAMA_NUM_PARALLEL=8
+export OLLAMA_MAX_QUEUE=64
+export OLLAMA_KEEP_ALIVE="-1"
+export OLLAMA_FLASH_ATTENTION=1
 
 mkdir -p "$HF_HOME" "$OLLAMA_MODELS"
 
@@ -39,6 +43,8 @@ echo "✅ Ollama is ready on port 11434!"
 # Téléchargement automatique garanti du modèle d'embedding (Plug & Play)
 echo "📦 Ensuring embedding model (qwen3-embedding:0.6b) is available..."
 ollama pull qwen3-embedding:0.6b
+echo "🔥 Pre-warming Qwen3-Embedding in GPU VRAM (Keep-Alive: Permanent)..."
+curl -s http://127.0.0.1:11434/api/embed -d '{"model": "qwen3-embedding:0.6b", "input": "Segula Warmup", "keep_alive": -1}' > /dev/null 2>&1 || true
 
 # 5. Démarrage de vLLM avec modèle AWQ persistant (Port 8001)
 echo "🚀 2/3 Starting vLLM with DeepSeek-R1 14B AWQ (Port 8001)..."

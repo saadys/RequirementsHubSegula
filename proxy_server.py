@@ -7,8 +7,9 @@ app = FastAPI(title="Segula Sovereign AI Gateway")
 SECRET_TOKEN = "segula-super-secret-key-2026"
 
 # Clients asynchrones locaux avec pool de connexion robuste
-vllm_client = httpx.AsyncClient(base_url="http://127.0.0.1:8001", timeout=300.0)
-ollama_client = httpx.AsyncClient(base_url="http://127.0.0.1:11434", timeout=300.0)
+limits = httpx.Limits(max_connections=200, max_keepalive_connections=100)
+vllm_client = httpx.AsyncClient(base_url="http://127.0.0.1:8001", timeout=300.0, limits=limits)
+ollama_client = httpx.AsyncClient(base_url="http://127.0.0.1:11434", timeout=300.0, limits=limits)
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 async def proxy_all(path: str, request: Request):
