@@ -1,15 +1,53 @@
 # proxy_server.py on Lightning AI Studio
 import httpx
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
-app = FastAPI(title="Segula Sovereign AI Gateway")
+app = FastAPI(
+    title="Segula Sovereign AI Gateway",
+    description="Unified authenticated gateway for DeepSeek-R1 (vLLM) and Qwen3-Embedding (Ollama)"
+)
+
 SECRET_TOKEN = "segula-super-secret-key-2026"
 
 # Clients asynchrones locaux avec pool de connexion robuste
 limits = httpx.Limits(max_connections=200, max_keepalive_connections=100)
 vllm_client = httpx.AsyncClient(base_url="http://127.0.0.1:8001", timeout=300.0, limits=limits)
 ollama_client = httpx.AsyncClient(base_url="http://127.0.0.1:11434", timeout=300.0, limits=limits)
+
+
+@app.get("/")
+@app.get("/health")
+async def health_check():
+    """Public healthcheck endpoint for quick browser testing and status verification."""
+    vllm_ok = False
+    ollama_ok = False
+    try:
+        r = await vllm_client.get("/v1/models", timeout=2.0)
+        vllm_ok = (r.status_code == 200)
+    except Exception:
+        pass
+
+    try:
+        r = await ollama_client.get("/api/tags", timeout=2.0)
+        ollama_ok = (r.status_code == 200)
+    except Exception:
+        pass
+
+    overall_status = "healthy" if (vllm_ok and ollama_ok) else "starting"
+    return JSONResponse(
+        status_code=200 if overall_status == "healthy" else 503,
+        content={
+            "status": overall_status,
+            "service": "Segula Sovereign AI Gateway",
+            "vllm_deepseek_r1": "ready" if vllm_ok else "initializing",
+            "ollama_embeddings": "ready" if ollama_ok else "initializing",
+            "model": "casperhansen/deepseek-r1-distill-qwen-14b-awq",
+            "embedding_model": "qwen3-embedding:0.6b",
+            "auth_required": True
+        }
+    )
+
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
 async def proxy_all(path: str, request: Request):
@@ -51,6 +89,7 @@ async def proxy_all(path: str, request: Request):
             status_code=503,
             content=f"Service Unavailable: Backend is waiting for {service_name} to finish startup."
         )
+
 
 if __name__ == "__main__":
     import uvicorn

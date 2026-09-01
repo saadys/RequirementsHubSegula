@@ -18,12 +18,79 @@
 
 ---
 
+## 🚀 5-Minute Sovereign Quickstart (3 Simple Steps)
+
+Get the entire sovereign AI platform running locally in under 5 minutes:
+
+```
+ ┌─────────────────────────┐     ┌─────────────────────────┐     ┌─────────────────────────┐
+ │ 1. Start Sovereign GPU  │ ──► │  2. Paste Studio URL    │ ──► │   3. Run Quickstart     │
+ │   ./start.sh on Studio  │     │      in your .env       │     │     ./quickstart.sh     │
+ └─────────────────────────┘     └─────────────────────────┘     └─────────────────────────┘
+```
+
+### ⚡ Step 1: Start Sovereign GPU Engine on Lightning AI (⏱️ ~2 min)
+1. Open your GPU Studio on **[Lightning AI](https://lightning.ai/)** (NVIDIA L4, T4, or A10G).
+2. Run the automated sovereign stack starter:
+   ```bash
+   chmod +x start.sh
+   ./start.sh
+   ```
+   > *This starts vLLM (`deepseek-r1-distill-qwen-14b-awq`), Ollama (`qwen3-embedding:0.6b`), and the secure proxy gateway on port **8000**.*
+3. In the Studio **Ports** panel, make port **8000** **Public** and copy the URL (e.g. `https://8000-01m03qzk5mcssvw8pk45ke8839.cloudspaces.litng.ai`).
+
+---
+
+### ⚙️ Step 2: Configure Environment (⏱️ ~30 sec)
+Clone this repository and create your `.env` file:
+```bash
+git clone https://github.com/saadys/RequirementsHubSegula.git
+cd RequirementsHubSegula
+cp .env.example .env
+```
+Open `.env` and set `VLLM_BASE_URL` and `OLLAMA_BASE_URL` with your Studio URL:
+```ini
+# NOTE: VLLM_BASE_URL MUST end with '/v1'
+VLLM_BASE_URL=https://8000-YOUR-STUDIO-ID.cloudspaces.litng.ai/v1
+OLLAMA_BASE_URL=https://8000-YOUR-STUDIO-ID.cloudspaces.litng.ai
+```
+
+---
+
+### 🌐 Step 3: Launch Full Platform (⏱️ ~2 min)
+Run the 1-click launcher:
+```bash
+chmod +x quickstart.sh
+./quickstart.sh
+```
+*(Or manually: `docker compose -f docker/docker-compose.yml up --build -d`)*
+
+🎉 **That's it! Access your platform immediately:**
+* 🌐 **Web Interface (React 19 SPA):** [http://localhost:5173](http://localhost:5173)
+* 📖 **Backend API & Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+* 🗄️ **Database Adminer (pgvector viewer):** [http://localhost:8085](http://localhost:8085)
+
+> 💡 **Auto-Seeding Guarantee:** PostgreSQL database migrations, pgvector extension, the 5 Segula operating departments, and historic RAG embeddings are **automatically initialized and pre-loaded** on the first boot.
+
+---
+
+### 🛠️ Quick Troubleshooting Matrix
+
+| Issue | Cause | Solution |
+|---|---|---|
+| `502 / Connection Refused` on LLM | Studio port 8000 is not public or studio is stopped | Check Lightning AI Ports tab: ensure port `8000` is set to **Public** and `./start.sh` is active. |
+| `404 Not Found` on vLLM calls | Missing `/v1` suffix in `VLLM_BASE_URL` | Ensure `VLLM_BASE_URL` ends with `/v1` (e.g. `https://8000-...cloudspaces.litng.ai/v1`). |
+| Empty department dropdown | Database not seeded | Run `docker compose -f docker/docker-compose.yml run --rm migrate` to auto-seed departments and RAG vectors. |
+| Port conflicts (`5173` or `8000`) | Another local service is using the port | Stop conflicting services or adjust mapped host ports in `docker/docker-compose.yml`. |
+
+---
+
 ## 📖 Table of Contents
 1. [🎯 Problem Statement & What It Solves](#-problem-statement--what-it-solves)
 2. [✨ Key Features & Capabilities](#-key-features--capabilities)
 3. [🏛️ System Architecture](#️-system-architecture)
-4. [💻 Local Development Guide (Step-by-Step)](#-local-development-guide-step-by-step)
-5. [⚡ Sovereign GPU Setup (vLLM + Ollama on Lightning AI)](#-sovereign-gpu-setup-vllm--ollama-on-lightning-ai)
+4. [💻 Local Development Guide (Without Docker)](#-local-development-guide-without-docker)
+5. [⚡ Sovereign GPU Architecture (vLLM + Ollama + Proxy)](#-sovereign-gpu-architecture-vllm--ollama--proxy)
 6. [☁️ Deployment to GCP Cloud Run (Step-by-Step)](#️-deployment-to-gcp-cloud-run-step-by-step)
 7. [🗃️ Database Migrations & Vector RAG Seeding](#️-database-migrations--vector-rag-seeding)
 8. [🧪 Testing & Quality Assurance](#-testing--quality-assurance)
@@ -79,7 +146,7 @@ flowchart TD
     end
 
     subgraph Infrastructure [Sovereign Infrastructure]
-        RAG <-->|Session Pooler IPv4| DB[(Supabase PostgreSQL 17 + pgvector)]
+        RAG <-->|Session Pooler IPv4| DB[(PostgreSQL 17 + pgvector)]
         LLM <-->|Bearer Auth /v1| Proxy[Secure Reverse Proxy :8000]
         Proxy -->|/v1| vLLM[vLLM Port 8001: DeepSeek-R1 14B AWQ]
         Proxy -->|/api/embed| Ollama[Ollama Port 11434: Qwen3 Embedding]
@@ -91,22 +158,18 @@ flowchart TD
 
 ---
 
-## 💻 Local Development Guide (Step-by-Step)
+## 💻 Local Development Guide (Without Docker)
+
+For active local development of backend and frontend without Docker:
 
 ### 1. Prerequisites
 Ensure you have the following installed on your local system:
 * **Python 3.12+**
 * **[uv](https://github.com/astral-sh/uv)** (Extremely fast Python package manager)
 * **Node.js 20+ & npm**
-* **Docker & Docker Compose** (for local PostgreSQL + pgvector)
+* **PostgreSQL with pgvector** (or run `docker compose -f docker/docker-compose.yml up -d postgres`)
 
-### 2. Clone the Repository
-```bash
-git clone https://github.com/saadys/RequirementsHubSegula.git
-cd RequirementsHubSegula
-```
-
-### 3. Install Backend & Frontend Dependencies
+### 2. Install Backend & Frontend Dependencies
 ```bash
 # Install Python dependencies in a virtual environment
 uv sync --extra dev
@@ -115,48 +178,13 @@ uv sync --extra dev
 cd frontend && npm install && cd ..
 ```
 
-### 4. Configure Environment Variables (`.env`)
-Copy the example environment file:
+### 3. Run Migrations & Seed Database
 ```bash
-cp .env.example .env
-```
-
-Edit `.env` with your credentials:
-```ini
-ENV=development
-PORT=8000
-
-# Database (Local Docker or Supabase Session Pooler)
-DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5435/requirementshub
-
-# Sovereign AI Backend (Lightning AI or local Ollama)
-LLM_BACKEND=lightning_vllm
-USE_LOCAL_LLM=true
-VLLM_BASE_URL=https://8000-YOUR-STUDIO-ID.cloudspaces.litng.ai
-VLLM_API_KEY=segula-super-secret-key-2026
-VLLM_MODEL=casperhansen/deepseek-r1-distill-qwen-14b-awq
-
-OLLAMA_BASE_URL=https://8000-YOUR-STUDIO-ID.cloudspaces.litng.ai
-OLLAMA_API_KEY=segula-super-secret-key-2026
-LOCAL_EMBEDDING_MODEL=qwen3-embedding:0.6b
-EMBEDDING_DIMENSION=1024
-```
-
-### 5. Start Local PostgreSQL Database
-```bash
-docker compose -f docker/docker-compose.yml up -d postgres
-```
-
-### 6. Apply Database Migrations & Seed Projects
-```bash
-# Apply schema and pgvector extension
 uv run alembic upgrade head
-
-# Seed initial departments and historic vector knowledge base
 uv run python -m backend.cli.seed
 ```
 
-### 7. Run Backend & Frontend Servers
+### 4. Run Backend & Frontend in Two Terminals
 ```bash
 # Terminal 1: Start FastAPI Backend
 uv run uvicorn backend.main:app --reload --port 8000
@@ -169,19 +197,34 @@ Visit **`http://localhost:5173`** to access the web application!
 
 ---
 
-## ⚡ Sovereign GPU Setup (vLLM + Ollama on Lightning AI)
+## ⚡ Sovereign GPU Architecture (vLLM + Ollama + Proxy)
 
-To run **DeepSeek-R1-14B-AWQ** and **Qwen3-Embedding** on an NVIDIA GPU (T4 / L4 / A10G):
+The sovereign GPU setup is orchestrated via `start.sh` and `proxy_server.py`:
 
-1. Launch a Studio on **[Lightning AI](https://lightning.ai/)** with a GPU instance.
-2. In the Studio terminal, clone the repo and execute `start.sh`:
-   ```bash
-   chmod +x start.sh
-   ./start.sh
-   ```
-3. `start.sh` automatically installs Ollama, pulls `qwen3-embedding:0.6b`, starts vLLM on port `8001`, and exposes the unified gateway `proxy_server.py` on port `8000`.
-4. In the Studio **Ports** panel, set Port **8000** to **Public**.
-5. Copy the generated public URL (e.g., `https://8000-xxxx.cloudspaces.litng.ai`).
+```
+                    ┌──────────────────────────────────────────────┐
+                    │       Lightning AI Studio (Port 8000)        │
+                    │                                              │
+                    │   ┌──────────────────────────────────────┐   │
+                    │   │        proxy_server.py (:8000)       │   │
+                    │   │   • Bearer Token Authentication      │   │
+                    │   │   • Unified Gateway Dispatcher       │   │
+                    │   └───────┬──────────────────────┬───────┘   │
+                    │           │                      │           │
+                    │      /v1  │           /api/embed │           │
+                    │           ▼                      ▼           │
+                    │   ┌───────────────┐      ┌───────────────┐   │
+                    │   │     vLLM      │      │    Ollama     │   │
+                    │   │  Port :8001   │      │  Port :11434  │   │
+                    │   │  DeepSeek-R1  │      │  Qwen3-Embed  │   │
+                    │   │   14B AWQ     │      │   1024-dim    │   │
+                    │   └───────────────┘      └───────────────┘   │
+                    └──────────────────────────────────────────────┘
+```
+
+1. **`vLLM` (Port 8001):** Executes the 14B DeepSeek-R1 model with AWQ 4-bit quantization, PagedAttention, and `xgrammar` guided JSON decoding.
+2. **`Ollama` (Port 11434):** Serves `qwen3-embedding:0.6b` with native `/api/embed` support.
+3. **`proxy_server.py` (Port 8000):** Acts as a secure, authenticated single entry point routing OpenAI-compatible LLM requests (`/v1`) to vLLM and embedding requests (`/api/embed`) to Ollama.
 
 ---
 
@@ -202,10 +245,7 @@ The application is deployed using a production unified container pattern that se
 1. In Google Cloud Console, enable **Cloud Run API** and **Artifact Registry API**.
 2. Create an Artifact Registry Docker repository:
    ```bash
-   gcloud artifacts repositories create cloud-run-source-deploy \
-       --repository-format=docker \
-       --location=europe-west9 \
-       --description="Segula AI Requirement Hub Images"
+   gcloud artifacts repositories create cloud-run-source-deploy        --repository-format=docker        --location=europe-west9        --description="Segula AI Requirement Hub Images"
    ```
 3. Create a Service Account with roles `roles/run.admin`, `roles/artifactregistry.writer`, and `roles/iam.serviceAccountUser`.
 4. Generate a JSON Key for the Service Account.
@@ -218,7 +258,7 @@ In your GitHub Repository, navigate to **Settings ➔ Secrets and variables ➔ 
 | `GCP_PROJECT_ID` | Your Google Cloud Project ID |
 | `GCP_SA_KEY` | The complete JSON content of your GCP Service Account Key |
 | `DATABASE_URL` | Your Supabase Session Pooler connection string |
-| `VLLM_BASE_URL` | Your Lightning AI Public URL (`https://8000-xxxx.cloudspaces.litng.ai`) |
+| `VLLM_BASE_URL` | Your Lightning AI Public URL (`https://8000-xxxx.cloudspaces.litng.ai/v1`) |
 | `VLLM_API_KEY` | `segula-super-secret-key-2026` |
 | `OLLAMA_BASE_URL` | Your Lightning AI Public URL (`https://8000-xxxx.cloudspaces.litng.ai`) |
 | `OLLAMA_API_KEY` | `segula-super-secret-key-2026` |
@@ -284,7 +324,7 @@ When the backend is running, explore the interactive documentation:
 | Method | Route | Description |
 |---|---|---|
 | `GET` | `/api/health` | Service health status and database connectivity check |
-| `GET` | `/api/departments` | List all 5 Segula operating departments |
+| `GET` | `/api/departments/` | List all 5 Segula operating departments |
 | `GET` | `/api/departments/{id}/fields` | Dynamic department-specific requirement schema |
 | `POST` | `/api/submissions` | Standard requirement submission (Async / Polling) |
 | `POST` | `/api/submissions/stream` | Real-time Server-Sent Events (SSE) token streaming |

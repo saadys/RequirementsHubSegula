@@ -137,8 +137,24 @@ class CategoricalFactExtraction(BaseModel):
         if v is None or v == "":
             raise ValueError("target_sub_function is required and cannot be null.")
         s = str(v).strip().upper()
-        if "ENGINEERING" in s or "MECHANICAL" in s or "AUTOMOTIVE" in s or "CAD" in s or "FEA" in s or "SIMULATION" in s:
-            return "OUT_OF_SCOPE_ENGINEERING"
+        valid_values = {
+            "HR_PERSONNEL",
+            "RECRUITMENT_TALENT_ACQUISITION",
+            "FINANCE_CONTROLLING",
+            "PROCUREMENT_PURCHASING",
+            "IT_INTERNAL_HELPDESK",
+            "LEGAL_COMPLIANCE",
+            "GENERAL_ADMIN_FACILITIES",
+            "QUALITY_INTERNAL_AUDIT",
+            "TRAINING_ONBOARDING",
+            "DOCUMENT_ENGINEERING",
+            "OUT_OF_SCOPE_ENGINEERING",
+            "OUT_OF_SCOPE_OTHER",
+        }
+        if s in valid_values:
+            return s
+        if "DOCUMENT" in s or "KNOWLEDGE" in s:
+            return "DOCUMENT_ENGINEERING"
         if "RECRUIT" in s or "TALENT" in s or "CV" in s:
             return "RECRUITMENT_TALENT_ACQUISITION"
         if "HR" in s or "PERSONNEL" in s:
@@ -157,8 +173,8 @@ class CategoricalFactExtraction(BaseModel):
             return "QUALITY_INTERNAL_AUDIT"
         if "TRAIN" in s or "ONBOARD" in s:
             return "TRAINING_ONBOARDING"
-        if "DOCUMENT" in s or "KNOWLEDGE" in s:
-            return "DOCUMENT_ENGINEERING"
+        if "MECHANICAL" in s or "AUTOMOTIVE" in s or "CAD" in s or "FEA" in s or "SIMULATION" in s or "CRASH" in s or "ENGINEERING" in s:
+            return "OUT_OF_SCOPE_ENGINEERING"
         if "OUT_OF_SCOPE" in s or "OTHER" in s or "UNRELATED" in s:
             return "OUT_OF_SCOPE_OTHER"
         return s
