@@ -85,16 +85,31 @@ chmod +x quickstart.sh
 
 ---
 
+---
+
+## 🎥 Live Video Demonstration
+
+<div align="center">
+
+<video src="assets/demo.mp4" controls="controls" width="100%" style="max-width: 900px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);">
+  Your browser does not support the video tag. <a href="assets/demo.mp4">Click here to download and view demo.mp4</a>
+</video>
+
+<p><em>End-to-end workflow demonstration: Form submission, real-time token-by-token SSE reasoning streaming, multi-round clarification dialogue, and automated Statement of Work / Feasibility Dossier generation.</em></p>
+
+</div>
+
 ## 📖 Table of Contents
-1. [🎯 Problem Statement & What It Solves](#-problem-statement--what-it-solves)
-2. [✨ Key Features & Capabilities](#-key-features--capabilities)
-3. [🏛️ System Architecture](#️-system-architecture)
-4. [💻 Local Development Guide (Without Docker)](#-local-development-guide-without-docker)
-5. [⚡ Sovereign GPU Architecture (vLLM + Ollama + Proxy)](#-sovereign-gpu-architecture-vllm--ollama--proxy)
-6. [☁️ Deployment to GCP Cloud Run (Step-by-Step)](#️-deployment-to-gcp-cloud-run-step-by-step)
-7. [🗃️ Database Migrations & Vector RAG Seeding](#️-database-migrations--vector-rag-seeding)
-8. [🧪 Testing & Quality Assurance](#-testing--quality-assurance)
-9. [🌐 API Reference & Documentation](#-api-reference--documentation)
+1. [🎥 Live Video Demonstration](#-live-video-demonstration)
+2. [🎯 Problem Statement & What It Solves](#-problem-statement--what-it-solves)
+3. [✨ Key Features & Capabilities](#-key-features--capabilities)
+4. [🏛️ System Architecture](#️-system-architecture)
+5. [💻 Local Development Guide (Without Docker)](#-local-development-guide-without-docker)
+6. [⚡ Sovereign GPU Architecture (vLLM + Ollama + Proxy)](#-sovereign-gpu-architecture-vllm--ollama--proxy)
+7. [☁️ Deployment to GCP Cloud Run (Step-by-Step)](#️-deployment-to-gcp-cloud-run-step-by-step)
+8. [🗃️ Database Migrations & Vector RAG Seeding](#️-database-migrations--vector-rag-seeding)
+9. [🧪 Testing & Quality Assurance](#-testing--quality-assurance)
+10. [🌐 API Reference & Documentation](#-api-reference--documentation)
 
 ---
 
@@ -130,6 +145,18 @@ Within global engineering firms like **Segula Technologies**, non-technical oper
 ---
 
 ## 🏛️ System Architecture
+
+<div align="center">
+
+![Segula AI Requirement Hub High-Level Architecture](assets/ai_hub_requirements_diagram.png)
+
+*Figure 1: High-Level Architecture & Component Flow — End User React 19 SPA, Google Cloud Run Backend (FastAPI + LangGraph), Sovereign Lightning AI GPU Studio (vLLM DeepSeek-R1 14B AWQ + Ollama Qwen3-Embedding), and PostgreSQL 16 pgvector Data Layer.*
+
+</div>
+
+<br/>
+
+### 🔄 Agentic Workflow & Component Interactions
 
 ```mermaid
 flowchart TD
