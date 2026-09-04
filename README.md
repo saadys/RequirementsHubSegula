@@ -94,9 +94,7 @@ chmod +x quickstart.sh
 https://github.com/user-attachments/assets/7ef2b1dc-d543-42af-a7cd-0791be6ed310
 
 
-<video src="assets/demo.mp4" controls="controls" width="100%" style="max-width: 900px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);">
-  Your browser does not support the video tag. <a href="assets/demo.mp4">Click here to download and view demo.mp4</a>
-</video>
+
 
 <p><em>End-to-end workflow demonstration: Form submission, real-time token-by-token SSE reasoning streaming, multi-round clarification dialogue, and automated Statement of Work / Feasibility Dossier generation.</em></p>
 
